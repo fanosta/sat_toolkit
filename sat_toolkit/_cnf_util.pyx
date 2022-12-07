@@ -578,6 +578,15 @@ cdef class DNF:
 
     @classmethod
     def from_lut(cls, on_lut: np.ndarray, dc_lut: Optional[np.ndarray] = None):
+        """
+        Creates a DNF from a lookup table (LUT).
+
+        :param on_lut: specifies where the DNF should be on, i.e., 1
+        :param dc_lut: specifies where the value of the DNF can be ignored, this allows for better optimization, defaults to None
+
+        :return: DNF with on_set and dc_set initialized according to parameters
+        :rtype: DNF
+        """
         if len(on_lut.shape) != 1 or (dc_lut is not None and len(dc_lut.shape) != 1):
             raise ValueError('parameters must be one dimensional')
 
@@ -599,10 +608,20 @@ cdef class DNF:
 
     @classmethod
     def from_indices(cls, numbits: int, on_indices: np.array, dc_indices = np.array([], dtype=int)):
+        """
+        Creates a DNF from the set of indices with value 1 and optionally indices where the value can be ignored.
+
+        :param numbits: number of input bits for the DNF
+        :param on_indices: set of indices where the DNF should be on, i.e., 1
+        :param dc_indices: set of indices where the DNF value can be ignored, this allows for better optimization, defaults to []
+
+        :return: DNF with on_set and dc_set initialized according to parameters
+        :rtype: DNF
+        """
         return cls(cls.INIT_INDEX_SET, numbits, on_indices, dc_indices)
 
 
-    def write(self, io: io.TextIOBase, espresso:bool = False, invert: bool = False):
+    def write(self, io: io.TextIOBase, espresso: bool = False, invert: bool = False):
         i_list = range(1 << self.numbits)
 
         if espresso:
@@ -652,6 +671,14 @@ cdef class DNF:
         return True
 
     def to_minimal_cnf(self, espresso_args: List[str] = []) -> CNF:
+        """
+        Uses espresso to convert the DNF to a minimized CNF.
+
+        :param espresso_args: extra parameters given when calling espresso, defaults to []
+
+        :return: CNF minimized by espresso
+        :rtype: CNF
+        """
         with sp.Popen(['espresso'] + espresso_args, stdin=sp.PIPE, stdout=sp.PIPE, text=True) as espresso:
             self.write(espresso.stdin, True, True)
             espresso.stdin.close()
