@@ -131,10 +131,10 @@ cdef class CNF:
     cdef ssize_t strides[1]
     cdef ssize_t view_count
 
-    def __init__(self, clauses = None):
+    def __init__(self, clauses = None, nvars = -1):
         pass
 
-    def __cinit__(self, int[:] clauses = None):
+    def __cinit__(self, int[:] clauses = None, int nvars = -1):
         cdef ssize_t i, l = 0
         if clauses is not None:
             l = clauses.shape[0]
@@ -145,6 +145,13 @@ cdef class CNF:
 
         if clauses is not None:
             self._add_clauses(clauses)
+        if nvars != -1:
+            if nvars < self.nvars:
+                raise ValueError(f"explicitly given nvars too small ({nvars} < {self.nvars})")
+            self.nvars = nvars
+
+
+
 
     @staticmethod
     cdef CNF _from_dimacs(const uint8_t[::1] dimacs):
@@ -168,6 +175,8 @@ cdef class CNF:
         values = np.fromstring(buf[:remaining_len], dtype=np.int32, sep=' ')
 
         res._add_clauses(values)
+        assert nvars >= res.nvars
+        res.nvars = nvars
         return res
 
     @staticmethod
@@ -222,6 +231,8 @@ cdef class CNF:
         cdef CNF res = CNF.__new__(CNF)
         if clauses.size() > 0:
             res._add_clauses(<int[:clauses.size()]> clauses.data())
+        assert numbits >= <unsigned int> res.nvars 
+        res.nvars = numbits
         return res
 
 
@@ -484,7 +495,7 @@ cdef class CNF:
 
     # pickle support
     def __reduce__(self):
-        return CNF, (np.array(self),)
+        return CNF, (np.array(self), self.nvars)
 
     def equiv(self, CNF other):
         """
