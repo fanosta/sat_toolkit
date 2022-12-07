@@ -374,6 +374,27 @@ cdef class CNF:
         free_buf(&buf)
         return py_bytes.decode()
 
+    def minimze_espresso(self, espresso_args: List[str] = []) -> CNF:
+        """
+        Uses espresso to minimze the given CNF.
+
+        :param espresso_args: extra parameters given when calling espresso, defaults to []
+
+        :return: a new CNF object as minimized by espresso
+        :rtype: CNF
+        """
+        with sp.Popen(['espresso'] + espresso_args, stdin=sp.PIPE, stdout=sp.PIPE, text=True) as espresso:
+            espresso.stdin.write(self.to_espresso())
+            espresso.stdin.close()
+
+            cnf = CNF.from_espresso(espresso.stdout.read())
+
+            ret_code = espresso.wait()
+            if ret_code != 0:
+                raise sp.CalledProcessError(ret_code, ' '.join(espresso.args))
+
+            return cnf
+
     cdef Clause get_clause(self, ssize_t idx):
         cdef size_t begin, end, i
         cdef size_t numclauses = self.start_indices.size()
