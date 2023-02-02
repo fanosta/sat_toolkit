@@ -1,0 +1,2 @@
+include sat_toolkit/*.h
+include sat_toolkit/*.pyx
