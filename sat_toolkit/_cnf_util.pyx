@@ -31,7 +31,7 @@ cdef extern from *:
 import io, sys
 import numpy as np
 import subprocess as sp
-
+from tempfile import NamedTemporaryFile
 from typing import *
 
 from dataclasses import dataclass
@@ -376,9 +376,9 @@ cdef class CNF:
         free_buf(&buf)
         return py_bytes.decode()
 
-    def minimze_espresso(self, espresso_args: List[str] = []) -> CNF:
+    def minimize_espresso(self, espresso_args: List[str] = []) -> CNF:
         """
-        Uses espresso to minimze the given CNF.
+        Uses espresso to minimize the given CNF.
 
         :param espresso_args: extra parameters given when calling espresso, defaults to []
 
@@ -398,6 +398,54 @@ cdef class CNF:
                 raise sp.CalledProcessError(ret_code, ' '.join(espresso.args))
 
             return cnf
+
+    def _minimize_dimacs(self, args: List[str], outfile: str):
+        """
+        calls args with self.to_dimacs() as stdin, waits for the command to
+        finish with exit code 10 or 20 and parses `outfile` as DIAMCS`.
+
+        :return: a new CNF object read from `outfile`
+        :rtype: CNF
+        """
+        cdef int ret_code = 0
+        with sp.Popen(args, stdin=sp.PIPE, text=True) as minimizer:
+            minimizer.stdin.write(self.to_dimacs())
+            minimizer.stdin.close()
+
+            ret_code = minimizer.wait()
+            if ret_code not in [10, 20]:
+                # for SAT solvers ret_code == 10 corresponds to SATISFIABLE and
+                # ret == 20 to UNSATISFIABLE (see for example
+                # http://www.satcompetition.org/2004/format-solvers2004.html)
+                raise sp.CalledProcessError(ret_code, ' '.join(minimizer.args))
+
+        with open(outfile, 'r') as f:
+            return CNF.from_dimacs(f.read())
+
+    def minimize_lingeling(self, optlevel=None, timeout=0, extra_args: List[str] = []) -> CNF:
+        """
+        Uses Lingeling to minimize the given CNF.
+
+        :param optlevel: optimization level given to Lingeling via -O<optlevel>
+        :param timeout: timeout given to Lingeling via -T <timeout>
+        :param extra_args: extra parameters given when calling Lingeling, defaults to []
+
+        :return: a new CNF object minimized by Lingeling
+        :rtype: CNF
+        """
+        cdef int ret_code = 0
+
+        args = ['lingeling', '-s']
+        if optlevel is not None:
+            args += [f'-O{optlevel}']
+        if timeout is not None:
+            args += ['-T', f'{timeout}']
+
+        with NamedTemporaryFile(prefix='lingeling_', suffix='.dimacs') as f:
+            args += ['-o', f.name]
+            args += extra_args
+            return self._minimize_dimacs(args, f.name)
+
 
     cdef Clause get_clause(self, ssize_t idx):
         cdef size_t begin, end, i
