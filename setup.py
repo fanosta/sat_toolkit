@@ -20,7 +20,7 @@ if USE_CYTHON:
 
 setup(
     name='sat-toolkit',
-    version='0.1.1',
+    version='0.1.2',
     author='Marcel Nageler',
     author_email='marcel.nageler@iaik.tugraz.at',
     description='Tool for manipulating CNF formulas',
