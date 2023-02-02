@@ -1,5 +1,5 @@
 from ._cnf_util import (
-    # Clause,
+    Clause,
     CNF,
-    DNF,
+    Truthtable,
 )

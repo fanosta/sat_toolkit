@@ -120,6 +120,8 @@ cdef class Clause:
 cdef class CNF:
     """
     Class for storing and manipulating CNF formulas.
+    The CNF is represented in a format closely related to the DIMACS format.
+    Therefore, indices start with 1.
     """
     cdef readonly vector[int] clauses
     cdef readonly vector[size_t] start_indices
@@ -383,6 +385,8 @@ cdef class CNF:
         :return: a new CNF object as minimized by espresso
         :rtype: CNF
         """
+        cdef int ret_code
+
         with sp.Popen(['espresso'] + espresso_args, stdin=sp.PIPE, stdout=sp.PIPE, text=True) as espresso:
             espresso.stdin.write(self.to_espresso())
             espresso.stdin.close()
@@ -511,12 +515,13 @@ cdef class CNF:
     def __releasebuffer__(self, Py_buffer *buffer):
         self.view_count -= 1
 
-cdef class DNF:
+cdef class Truthtable:
     """
-    A boolean function in canonical DNF.
-    The DNF is stored using a table for the ON set and the DC set of the function.
+    A boolean function represented as a truth table.
+    The truth table is stored using a table for the ON set and the DC set of the function.
     The ON set denotes where the value of the function is 1/true, while the DC set
     denotes where the value of the function is left unspecified.
+    The DC set allows more efficient CNF representations when optimizing with espresso.
     The OFF set is the complement of the two sets.
     """
     cdef public on_set
@@ -540,13 +545,13 @@ cdef class DNF:
     @classmethod
     def from_lut(cls, on_lut: np.ndarray, dc_lut: Optional[np.ndarray] = None):
         """
-        Creates a DNF from a lookup table (LUT).
+        Creates a Truthtable from a lookup table (LUT).
 
-        :param on_lut: specifies where the DNF should be on, i.e., 1
-        :param dc_lut: specifies where the value of the DNF can be ignored, this allows for better optimization, defaults to None
+        :param on_lut: specifies where the Truthtable should be on, i.e., 1
+        :param dc_lut: specifies where the value of the Truthtable can be ignored, this allows for better optimization, defaults to None
 
-        :return: DNF with on_set and dc_set initialized according to parameters
-        :rtype: DNF
+        :return: Truthtable with on_set and dc_set initialized according to parameters
+        :rtype: Truthtable
         """
         if len(on_lut.shape) != 1 or (dc_lut is not None and len(dc_lut.shape) != 1):
             raise ValueError('parameters must be one dimensional')
@@ -570,23 +575,22 @@ cdef class DNF:
     @classmethod
     def from_indices(cls, numbits: int, on_indices: np.array, dc_indices = np.array([], dtype=int)):
         """
-        Creates a DNF from the set of indices with value 1 and optionally indices where the value can be ignored.
+        Creates a Truthtable from the set of indices with value 1 and optionally indices where the value can be ignored.
 
-        :param numbits: number of input bits for the DNF
-        :param on_indices: set of indices where the DNF should be on, i.e., 1
-        :param dc_indices: set of indices where the DNF value can be ignored, this allows for better optimization, defaults to []
+        :param numbits: number of input bits for the Truthtable
+        :param on_indices: set of indices where the Truthtable should be on, i.e., 1
+        :param dc_indices: set of indices where the Truthtable value can be ignored, this allows for better optimization, defaults to []
 
-        :return: DNF with on_set and dc_set initialized according to parameters
-        :rtype: DNF
+        :return: Truthtable with on_set and dc_set initialized according to parameters
+        :rtype: Truthtable
         """
         return cls(cls.INIT_INDEX_SET, numbits, on_indices, dc_indices)
 
 
-    def write(self, io: io.TextIOBase, espresso: bool = False, invert: bool = False):
+    def _write(self, io: io.TextIOBase, espresso: bool = False, invert: bool = False):
         i_list = range(1 << self.numbits)
 
         if espresso:
-            #i_list, = np.where(self.on_set | self.dc_set if self.dc_set is not None else self.on_set)
             i_list = np.concatenate((self.on_set, self.dc_set), axis=0)
             i_list.sort()
             io.write(f'.i {self.numbits}\n')
@@ -612,10 +616,30 @@ cdef class DNF:
         if espresso:
             io.write(f'.end\n')
 
+    def to_espresso(self, phase='cnf'):
+        """
+        return the truthtable in espresso format
+
+        :param phase: wether to minimize the off_set ('cnf'/0) or on_set ('dnf'/1)
+
+        :return: Truthtable with on_set and dc_set initialized according to parameters
+        :rtype: Truthtable
+        """
+        if phase == 'cnf' or phase == '0' or phase == 0:
+            invert = True
+        elif phase == 'dnf' or phase == '1' or phase == 1:
+            invert = False
+        else:
+            raise ValueError('invalid value for `phase`')
+
+        res = io.StringIO()
+        self._write(res, True, invert)
+        return res.getvalue()
+
     def __repr__(self):
         result = io.StringIO()
-        result.write("Canonical DNF\n")
-        self.write(result)
+        result.write("Truthtable\n")
+        self._write(result)
         return result.getvalue()
 
     def __eq__(self, other):
@@ -631,9 +655,12 @@ cdef class DNF:
             return False
         return True
 
-    def to_minimal_cnf(self, espresso_args: List[str] = []) -> CNF:
+    def to_cnf(self, espresso_args: List[str] = []) -> CNF:
         """
-        Uses espresso to convert the DNF to a minimized CNF.
+        Uses espresso to convert the Truthtable to a minimized CNF.
+
+        The resulting CNF will be indexed by [1, self.numbits], where index 1
+        corresponds to the least significant bit in the truthtable index.
 
         :param espresso_args: extra parameters given when calling espresso, defaults to []
 
@@ -641,7 +668,7 @@ cdef class DNF:
         :rtype: CNF
         """
         with sp.Popen(['espresso'] + espresso_args, stdin=sp.PIPE, stdout=sp.PIPE, text=True) as espresso:
-            self.write(espresso.stdin, True, True)
+            self._write(espresso.stdin, True, True)
             espresso.stdin.close()
 
             cnf = CNF.from_espresso(espresso.stdout.read())
