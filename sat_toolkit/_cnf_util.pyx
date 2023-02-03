@@ -66,24 +66,35 @@ cdef class Clause:
 
         return res
 
-    def apply_to_variables(self, variables: list, true_op: Callable, false_op: Callable):
-        cdef size_t nvars = 0
+    def to_linear_constraint(self, variables: List):
+        """
+        return the current clause as a linear constraint suitable for MILP modeling.
+        the resulting constraint is suitable if all variables are constrained to [0, 1].
+
+        :param variables:   List of MILP (or similar) variables with overloaded
+                            __add__, __neg__, and __geq__. The list is shifted compared to the
+                            indexing, i.e. variables[0] correspsonds to index 1 in the Clause.
+        :return:    a linear constraint over variables
+        """
         cdef size_t i
         cdef int c
 
-        if <size_t> len(variables) < self._maxvar() + 1:
-            raise ValueError(f'too few variables supplied (need to include dummy variable for 0)')
+        cdef object lhs = 0
+        cdef int rhs = 1
 
-        res = [None] * (<ssize_t> self.clause.size())
+        if <size_t> len(variables) < self._maxvar():
+            raise IndexError(f'too few variables supplied')
 
         for i in range(self.clause.size()):
             c = self.clause[i]
+            var = variables[abs(c) - 1]
             if c > 0:
-                res[i] = true_op(variables[c])
+                lhs += var
             if c < 0:
-                res[i] = false_op(variables[-c])
-        return res
+                lhs += -var
+                rhs -= 1
 
+        return lhs >= rhs
 
     cdef size_t _maxvar(self):
         cdef size_t i
