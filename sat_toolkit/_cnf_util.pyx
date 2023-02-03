@@ -134,25 +134,18 @@ cdef class CNF:
     cdef ssize_t view_count
 
     def __init__(self, clauses = None, nvars = -1):
-        pass
-
-    def __cinit__(self, int[:] clauses = None, int nvars = -1):
-        cdef ssize_t i, l = 0
         if clauses is not None:
-            l = clauses.shape[0]
-        self.shape[0] = l
-        self.strides[0] = sizeof(self.clauses[0])
-        self.view_count = 0
-        self.nvars = 0
-
-        if clauses is not None:
-            self._add_clauses(clauses)
+            self.add_clauses(clauses)
         if nvars != -1:
             if nvars < self.nvars:
                 raise ValueError(f"explicitly given nvars too small ({nvars} < {self.nvars})")
             self.nvars = nvars
 
-
+    def __cinit__(self):
+        self.shape[0] = 0
+        self.strides[0] = sizeof(int)
+        self.view_count = 0
+        self.nvars = 0
 
 
     @staticmethod
@@ -233,7 +226,7 @@ cdef class CNF:
         cdef CNF res = CNF.__new__(CNF)
         if clauses.size() > 0:
             res._add_clauses(<int[:clauses.size()]> clauses.data())
-        assert numbits >= <unsigned int> res.nvars 
+        assert numbits >= <unsigned int> res.nvars
         res.nvars = numbits
         return res
 
@@ -263,8 +256,15 @@ cdef class CNF:
                 self.start_indices.push_back(old_len + i + 1)
 
     def add_clauses(self, clauses) -> None:
-        np_clauses = np.array(clauses, dtype=np.int32)
-        self._add_clauses(np_clauses)
+        cdef int[:] clauses_view = None
+
+        try:
+            clauses_view = clauses
+        except (TypeError, ValueError):
+            np_clauses = np.array(clauses, dtype=np.int32)
+            clauses_view = np_clauses
+
+        self._add_clauses(clauses_view)
 
     def add_clause(self, clause) -> None:
         "add a single clause to CNF formula"
@@ -546,10 +546,11 @@ cdef class CNF:
     # buffer support
     def __getbuffer__(self, cython.Py_buffer *buffer, int flags):
         self.shape[0] = self.clauses.size()
+        self.view_count += 1
 
         buffer.buf = <char *>&(self.clauses[0])
         buffer.format = 'i'                     # int
-        buffer.internal = NULL                  # see References
+        buffer.internal = NULL
         buffer.itemsize = self.strides[0]
         buffer.len = self.shape[0] * self.strides[0]
         buffer.ndim = 1
@@ -558,7 +559,6 @@ cdef class CNF:
         buffer.shape = &self.shape[0]
         buffer.strides = &self.strides[0]
         buffer.suboffsets = NULL                # for pointer arrays only
-        self.view_count += 1
 
     def __releasebuffer__(self, Py_buffer *buffer):
         self.view_count -= 1
