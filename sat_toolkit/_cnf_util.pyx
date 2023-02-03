@@ -95,33 +95,51 @@ cdef class Clause:
         return res
 
     @property
-    def maxvar(self):
+    def maxvar(self) -> int:
         return self._maxvar()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'Clause({self.clause})'
 
-    def __getitem__(self, ssize_t idx):
+    def __getitem__(self, ssize_t idx) -> int:
         if idx < 0:
             idx += self.clause.size()
         if idx < 0 or <size_t> idx >= self.clause.size():
             raise IndexError('index out of range')
         return self.clause[idx]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.clause.size()
 
-    def __iter__(self):
+    def __iter__(self) -> Iterable[int]:
         cdef size_t i = 0
         for i in range(self.clause.size()):
             yield self.clause[i]
+
+    def __eq__(self, other) -> bool:
+        cdef Clause other_clause
+        try:
+            other_clause = other
+        except TypeError:
+            return False
+        return self.clause == other_clause.clause
 
 
 cdef class CNF:
     """
     Class for storing and manipulating CNF formulas.
+
     The CNF is represented in a format closely related to the DIMACS format.
-    Therefore, indices start with 1.
+    A CNF is conjuction (logical AND) of clauses.
+    Each clause (logical AND) is a list of variables that ends with a 0.
+    A positive number indicates the presence of a variable in the clause while
+    a negative number indicates the presence of the negated varaible in the
+    clause.
+
+    For example, the CNF (x1 or not x2) and (x2 or x3) can be represented as
+    CNF([1, -2, 0, 2, 3, 0])
+
+
     """
     cdef readonly vector[int] clauses
     cdef readonly vector[size_t] start_indices
@@ -309,7 +327,10 @@ cdef class CNF:
         return self.logical_or(-var)
 
 
-    def to_dimacs(self):
+    def to_dimacs(self) -> str:
+        '''
+        return the CNF formatted in the DIMACS file format
+        '''
         cdef size_t max_len = snprintf(NULL, 0, "%d", -self.nvars)
         cdef size_t nclauses = self.start_indices.size()
         cdef ssize_t buf_size = (self.clauses.size() - nclauses) * (max_len + 1) + nclauses * (2)
@@ -337,7 +358,10 @@ cdef class CNF:
 
         return 'p cnf ' + str(self.nvars) + ' ' + str(nclauses) + '\n' + py_str.decode()
 
-    def to_espresso(self, print_numvars: bool = True):
+    def to_espresso(self, print_numvars: bool = True) -> str:
+        '''
+        return the CNF formatted in the espresso file format
+        '''
         cdef size_t i, j
         cdef int lit
         cdef char target_char
@@ -399,7 +423,7 @@ cdef class CNF:
 
             return cnf
 
-    def _minimize_dimacs(self, args: List[str], outfile: str):
+    def _minimize_dimacs(self, args: List[str], outfile: str) -> CNF:
         """
         calls args with self.to_dimacs() as stdin, waits for the command to
         finish with exit code 10 or 20 and parses `outfile` as DIAMCS`.
@@ -463,19 +487,19 @@ cdef class CNF:
 
         return result
 
-    def __getitem__(self, ssize_t idx):
+    def __getitem__(self, ssize_t idx) -> Clause:
         return self.get_clause(idx)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.start_indices.size()
 
-    def __iter__(self):
+    def __iter__(self) -> Iterable[Clause]:
         cdef size_t i = 0
         while i < self.start_indices.size():
             yield self.get_clause(i)
             i += 1
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if not isinstance(other, CNF):
             return False
 
@@ -489,21 +513,23 @@ cdef class CNF:
             return False
         return True
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'CNF over {self.nvars} variables with {self.start_indices.size()} clauses'
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.to_dimacs()
 
     # pickle support
     def __reduce__(self):
         return CNF, (np.array(self), self.nvars)
 
-    def equiv(self, CNF other):
+    def equiv(self, CNF other) -> bool:
         """
         Check for logical eqivalence between self and other.
         Calls `espresso -Dverify` to perform the comparison.
         """
+        cdef int ret_code = 0
+
         if self.nvars != other.nvars:
             return False
 
@@ -518,15 +544,24 @@ cdef class CNF:
 
             return ret_code == 0
 
-    def translate(self, new_vars):
-        cdef np_vars = np.array(new_vars, np.int32)
+    def translate(self, mapping) -> CNF:
+        """
+        Translate all variables in the CNF to a new index.
+        The translation mapping is given by the mapping paramter.
+
+        Index 0 must always map to index 0 again.
+
+        :return: a new CNF with variables changed according to mapping parameter
+        """
+        cdef np_vars = np.array(mapping, np.int32)
         cdef int [::1] var_view = np_vars
         cdef size_t i
 
         if var_view.shape[0] != self.nvars + 1:
             raise ValueError('need to provide translation for all 1+{self.nvars} variables')
         if var_view[0] != 0:
-            raise ValueError('variable 0 must be mapped to 0')
+            raise ValueError('variable 0 must map to 0 again')
+
         for i in range(1, <size_t> var_view.shape[0]):
             if var_view[i] == 0:
                 raise ValueError('variable must not be mapped to 0')
@@ -591,7 +626,7 @@ cdef class Truthtable:
 
 
     @classmethod
-    def from_lut(cls, on_lut: np.ndarray, dc_lut: Optional[np.ndarray] = None):
+    def from_lut(cls, on_lut: np.ndarray, dc_lut: Optional[np.ndarray] = None) -> Truthtable:
         """
         Creates a Truthtable from a lookup table (LUT).
 
@@ -621,7 +656,7 @@ cdef class Truthtable:
         return cls(cls.INIT_INDEX_SET, numbits, on_set, dc_set)
 
     @classmethod
-    def from_indices(cls, numbits: int, on_indices: np.array, dc_indices = np.array([], dtype=int)):
+    def from_indices(cls, numbits: int, on_indices: np.array, dc_indices = np.array([], dtype=int)) -> Truthtable:
         """
         Creates a Truthtable from the set of indices with value 1 and optionally indices where the value can be ignored.
 
@@ -635,7 +670,7 @@ cdef class Truthtable:
         return cls(cls.INIT_INDEX_SET, numbits, on_indices, dc_indices)
 
 
-    def _write(self, io: io.TextIOBase, espresso: bool = False, invert: bool = False):
+    def _write(self, io: io.TextIOBase, espresso: bool = False, invert: bool = False) -> None:
         i_list = range(1 << self.numbits)
 
         if espresso:
@@ -664,7 +699,7 @@ cdef class Truthtable:
         if espresso:
             io.write(f'.end\n')
 
-    def to_espresso(self, phase='cnf'):
+    def to_espresso(self, phase='cnf') -> str:
         """
         return the truthtable in espresso format
 
@@ -684,13 +719,13 @@ cdef class Truthtable:
         self._write(res, True, invert)
         return res.getvalue()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         result = io.StringIO()
         result.write("Truthtable\n")
         self._write(result)
         return result.getvalue()
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if self.numbits != other.numbits:
             return False
         if not np.all(self.on_set == other.on_set):
