@@ -296,10 +296,10 @@ cdef class CNF:
         self._add_clauses(clauses_view)
 
     def add_clause(self, clause) -> None:
-        "add a single clause to CNF formula"
+        """Add a single clause to CNF formula. Specify the clause without trailing 0."""
         cdef ssize_t clause_len = len(clause)
         np_clause = np.zeros(clause_len + 1, dtype=np.int32)
-        np_clause[:clause_len - 1] = clause
+        np_clause[:clause_len] = clause
         if np.count_nonzero(np_clause) != clause_len:
             raise ValueError('cannot use 0 in clause')
         self._add_clauses(np_clause)
