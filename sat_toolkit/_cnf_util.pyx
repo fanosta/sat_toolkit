@@ -32,9 +32,14 @@ import io, sys
 import numpy as np
 import subprocess as sp
 from tempfile import NamedTemporaryFile
-from typing import *
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from typing import *
 
 from dataclasses import dataclass
+
+__all__ = ['Clause', 'CNF', 'Truthtable']
 
 cdef int startswith(const unsigned char[:] buf, const char *start) nogil:
     cdef ssize_t l = strlen(start)
