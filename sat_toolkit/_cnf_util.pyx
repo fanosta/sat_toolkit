@@ -220,7 +220,7 @@ cdef class CNF:
         f = io.BytesIO(espresso.encode())
 
         for line_py in f:
-            line = line_py.strip()
+            line = line_py.rstrip()
             if startswith(line, b'.i '):
                 _, bits = line_py.split()
                 numbits = int(bits)
