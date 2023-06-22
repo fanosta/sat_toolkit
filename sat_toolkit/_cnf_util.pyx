@@ -32,6 +32,7 @@ import io, sys
 import numpy as np
 import subprocess as sp
 from tempfile import NamedTemporaryFile
+import collections
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -117,20 +118,84 @@ cdef class Clause:
     def __repr__(self) -> str:
         return f'Clause({self.clause})'
 
-    def __getitem__(self, ssize_t idx) -> int:
+    cdef size_t _get_absolute_index(self, ssize_t idx) except -1:
         if idx < 0:
             idx += self.clause.size()
         if idx < 0 or <size_t> idx >= self.clause.size():
             raise IndexError('index out of range')
-        return self.clause[idx]
+        return <size_t> idx
+
+    cdef size_t _get_slice_index(self, ssize_t idx) except -1:
+        if idx < 0:
+            idx += self.clause.size()
+        if idx < 0:
+            return 0
+        if <size_t> idx >= self.clause.size():
+            return self.clause.size()
+        return <size_t> idx
+
+
+    def __getitem__(self, ssize_t idx) -> int:
+        return self.clause[self._get_absolute_index(idx)]
 
     def __len__(self) -> int:
         return self.clause.size()
+
+    def __contains__(self, int needle) -> bool:
+        cdef size_t i
+        cdef int c
+
+        for i in range(self.clause.size()):
+            if self.clause[i] == needle:
+                return True
+
+        return False
 
     def __iter__(self) -> Iterable[int]:
         cdef size_t i = 0
         for i in range(self.clause.size()):
             yield self.clause[i]
+
+    def __reversed__(self) -> Iterable[int]:
+        cdef size_t i = 0
+        for i in reversed(range(self.clause.size())):
+            yield self.clause[i]
+
+    def count(self, int needle) -> size_t:
+        "Return the number of times needle appears in the list."
+        cdef size_t i
+        cdef int c
+        cdef size_t count = 0
+
+        for i in range(self.clause.size()):
+            if self.clause[i] == needle:
+                count += 1
+
+        return count
+
+    def index(self, int needle, start=None, end=None) -> size_t:
+        """
+        Return zero-based index in the list of the first item whose value is
+        equal to x. Raises a ValueError if there is no such item.
+
+        The optional arguments start and end are interpreted as in the slice
+        notation and are used to limit the search to a particular subsequence
+        of the list. The returned index is computed relative to the beginning
+        of the full sequence rather than the start argument.
+        """
+        cdef size_t start_idx = 0, end_idx = self.clause.size()
+        if start is not None:
+            start_idx = self._get_slice_index(start)
+        if end is not None:
+            end_idx = self._get_slice_index(end)
+
+        for i in range(start_idx, end_idx):
+            if self.clause[i] == needle:
+                return i
+
+        raise ValueError(f'{needle} is not in Clause')
+
+
 
     def __eq__(self, other) -> bool:
         cdef Clause other_clause
@@ -139,6 +204,8 @@ cdef class Clause:
         except TypeError:
             return False
         return self.clause == other_clause.clause
+
+collections.abc.Sequence.register(Clause)
 
 
 cdef class CNF:
