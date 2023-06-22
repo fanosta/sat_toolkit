@@ -477,6 +477,12 @@ cdef class CNF:
 
             buf_printf(&buf, "%s", line_buf)
 
+        # handle the case of a CNF with 0 clauses, a.k.a. a tautology
+        if self.start_indices.size() == 0:
+            memset(line_buf, b'-', self.nvars);
+            line_buf[self.nvars + 1] = b'0'
+            buf_printf(&buf, "%s", line_buf)
+
         buf_printf(&buf, ".e\n")
         py_bytes = buf.buf[:buf.len]
 
