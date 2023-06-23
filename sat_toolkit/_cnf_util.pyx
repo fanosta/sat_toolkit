@@ -4,7 +4,7 @@ cimport cython
 from libcpp.vector cimport vector
 from libc.stdio cimport printf, snprintf, sscanf
 from libc.stdlib cimport malloc, free
-from libc.string cimport strcpy, memset, strncmp, strlen
+from libc.string cimport strcpy, memset, strncmp, strlen, memcmp
 from sat_toolkit.types cimport *
 
 cdef extern from "fmt.h":
@@ -125,7 +125,7 @@ cdef class Clause:
             raise IndexError('index out of range')
         return <size_t> idx
 
-    cdef size_t _get_slice_index(self, ssize_t idx) except -1:
+    cdef size_t _get_slice_index(self, ssize_t idx):
         if idx < 0:
             idx += self.clause.size()
         if idx < 0:
@@ -176,14 +176,15 @@ cdef class Clause:
     def index(self, int needle, start=None, end=None) -> size_t:
         """
         Return zero-based index in the list of the first item whose value is
-        equal to x. Raises a ValueError if there is no such item.
+        equal to needle. Raises a ValueError if there is no such item.
 
         The optional arguments start and end are interpreted as in the slice
         notation and are used to limit the search to a particular subsequence
         of the list. The returned index is computed relative to the beginning
         of the full sequence rather than the start argument.
         """
-        cdef size_t start_idx = 0, end_idx = self.clause.size()
+        cdef size_t i, start_idx = 0, end_idx = self.clause.size()
+
         if start is not None:
             start_idx = self._get_slice_index(start)
         if end is not None:
@@ -586,6 +587,80 @@ cdef class CNF:
             yield self.get_clause(i)
             i += 1
 
+    def __reversed__(self) -> Iterable[Clause]:
+        cdef size_t i
+        for i in reversed(range(self.start_indices.size())):
+            yield self.get_clause(i)
+
+    cdef int _compare_clause(self, size_t idx, Clause other) nogil except -1:
+        cdef size_t begin, end, i
+        cdef size_t numclauses = self.start_indices.size()
+
+        if idx >= numclauses:
+            with gil:
+                raise IndexError('index out of range')
+
+        begin = self.start_indices[idx]
+        end = self.start_indices[idx + 1] if <size_t> idx + 1 < numclauses else self.clauses.size()
+
+        if end - 1 - begin != other.clause.size():
+            return 0
+        
+        for i in range(end - 1 - begin):
+            if self.clauses[begin + i] != other.clause[i]:
+                return 0
+
+        return 1
+
+    def __contains__(self, Clause needle) -> bool:
+        cdef size_t i
+
+        for i in range(self.start_indices.size()):
+            if self._compare_clause(i, needle):
+                return True
+
+    def count(self, Clause needle) -> bool:
+        cdef size_t i, count = 0
+
+
+        for i in range(self.start_indices.size()):
+            if self._compare_clause(i, needle):
+                count += 1
+        return count
+
+    cdef size_t _get_slice_index(self, ssize_t idx):
+        if idx < 0:
+            idx += self.start_indices.size()
+        if idx < 0:
+            return 0
+        if <size_t> idx >= self.start_indices.size():
+            return self.start_indices.size()
+        return <size_t> idx
+
+    def index(self, Clause needle, start=None, end=None) -> size_t:
+        """
+        Return zero-based index in the list of the first item whose value is
+        equal to needle. Raises a ValueError if there is no such item.
+
+        The optional arguments start and end are interpreted as in the slice
+        notation and are used to limit the search to a particular subsequence
+        of the list. The returned index is computed relative to the beginning
+        of the full sequence rather than the start argument.
+        """
+
+        cdef size_t i, start_idx = 0, end_idx = self.start_indices.size()
+        if start is not None:
+            start_idx = self._get_slice_index(start)
+        if end is not None:
+            end_idx = self._get_slice_index(end)
+
+        for i in range(start_idx, end_idx):
+            if self._compare_clause(i, needle):
+                return i
+
+        raise ValueError(f'{needle} is not in CNF')
+
+
     def __eq__(self, other) -> bool:
         if not isinstance(other, CNF):
             return False
@@ -687,6 +762,9 @@ cdef class CNF:
 
     def __releasebuffer__(self, Py_buffer *buffer):
         self.view_count -= 1
+
+collections.abc.Sequence.register(CNF)
+
 
 cdef class Truthtable:
     """
