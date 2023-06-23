@@ -231,7 +231,6 @@ cdef class CNF:
 
     #used for the buffer support
     cdef ssize_t shape[1]
-    cdef ssize_t strides[1]
     cdef ssize_t view_count
 
     def __init__(self, clauses = None, nvars = -1):
@@ -244,7 +243,6 @@ cdef class CNF:
 
     def __cinit__(self):
         self.shape[0] = 0
-        self.strides[0] = sizeof(int)
         self.view_count = 0
         self.nvars = 0
 
@@ -673,15 +671,18 @@ cdef class CNF:
         self.view_count += 1
 
         buffer.buf = <char *>&(self.clauses[0])
-        buffer.format = 'i'                     # int
+        if (flags & PyBUF_FORMAT) == PyBUF_FORMAT:
+            buffer.format = 'i'                     # int
         buffer.internal = NULL
-        buffer.itemsize = self.strides[0]
-        buffer.len = self.shape[0] * self.strides[0]
+        buffer.itemsize = sizeof(int)
+        buffer.len = self.shape[0] * sizeof(int)
         buffer.ndim = 1
         buffer.obj = self
         buffer.readonly = 1
-        buffer.shape = &self.shape[0]
-        buffer.strides = &self.strides[0]
+        if (flags & PyBUF_ND) == PyBUF_ND:
+            buffer.shape = &self.shape[0]
+        if (flags & PyBUF_STRIDES) == PyBUF_STRIDES:
+            buffer.strides = &buffer.itemsize
         buffer.suboffsets = NULL                # for pointer arrays only
 
     def __releasebuffer__(self, Py_buffer *buffer):
