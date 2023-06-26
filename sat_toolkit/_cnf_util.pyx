@@ -142,7 +142,7 @@ cdef class Clause:
     def __len__(self) -> int:
         return self.clause.size()
 
-    def __contains__(self, int needle) -> bool:
+    def __contains__(self, int needle) -> bint:
         cdef size_t i
         cdef int c
 
@@ -196,8 +196,6 @@ cdef class Clause:
                 return i
 
         raise ValueError(f'{needle} is not in Clause')
-
-
 
     def __eq__(self, other) -> bool:
         cdef Clause other_clause
@@ -558,6 +556,74 @@ cdef class CNF:
             args += ['-o', f.name]
             args += extra_args
             return self._minimize_dimacs(args, f.name)
+
+    def check_solution(self, uint8_t[:] solution) -> bool:
+        cdef size_t i
+        for i in range(solution_len):
+           if solution[i] not in [0, 1]:
+               raise ValueError(f'all elements in solution must be in [0, 1]')
+
+        return self._check_solution(solution)
+
+    cdef int _check_solution(self, uint8_t[:] solution) nogil:
+        cdef size_t i, clause_pos, clause_elem
+        cdef uint8_t expected
+
+        if self.nvars >= solution.shape[0]:
+            raise IndexError(f'solution of length {solution.shape[0]} too short for CNF with {self.nvars} variables')
+
+        for i in range(self.start_indices.size()):
+            if not self._check_solution_for_single_clause(i, solution):
+                return False
+
+        return True
+
+    cdef int _check_solution_for_single_clause(self, size_t clause_idx, uint8_t[:] solution) nogil:
+        cdef size_t clause_pos
+        cdef uint8_t expected
+        cdef int clause_elem
+
+        clause_pos = self.start_indices[clause_idx]
+
+        while self.clauses[clause_pos] != 0:
+            clause_elem = self.clauses[clause_pos]
+            expected = clause_elem > 0
+            if clause_elem < 0:
+                clause_elem = -clause_elem
+
+            if expected == solution[clause_elem]:
+                return True
+
+            clause_pos += 1
+
+        return False
+
+    def to_truthtable(self) -> Truthtable:
+        """
+        Return the current CNF as a Truthtable by iterating over all possible
+        variable assignments.
+        """
+        cdef size_t i, j
+        cdef uint8_t[:] truthtable_view
+        cdef uint8_t[:] current_sol_view
+
+        if self.nvars > 32:
+            raise ValueError('cannot find all solutions for CNF with more than 32 variables')
+
+        truthtable = np.empty((<uint64_t> 1) << self.nvars, np.uint8)
+        current_sol = np.empty(1 + self.nvars, np.uint8)
+
+        truthtable_view = truthtable
+        current_sol_view = current_sol
+        current_sol_view[0] = 0
+
+        with nogil:
+            for i in range((<uint64_t> 1) << self.nvars):
+                for j in range(1, self.nvars + 1):
+                    current_sol_view[j] = (i >> (j - 1)) & 1
+                truthtable_view[i] = self._check_solution(current_sol_view)
+
+        return Truthtable.from_lut(truthtable)
 
 
     cdef Clause get_clause(self, ssize_t idx):
