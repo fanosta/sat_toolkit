@@ -1,6 +1,7 @@
 #cython: language_level=3, annotation_typing=True, embedsignature=True, boundscheck=False, wraparound=False, cdivision=True
 #distutils: language = c++
 cimport cython
+from cpython cimport PyBUF_FORMAT, PyBUF_ND, PyBUF_STRIDES
 from libcpp.vector cimport vector
 from libc.stdio cimport printf, snprintf, sscanf
 from libc.stdlib cimport malloc, free
@@ -678,12 +679,15 @@ cdef class CNF:
     def __repr__(self) -> str:
         return f'CNF over {self.nvars} variables with {self.start_indices.size()} clauses'
 
+    def __array__(self) -> np.array:
+        return np.frombuffer(self)
+
     def __str__(self) -> str:
         return self.to_dimacs()
 
     # pickle support
     def __reduce__(self):
-        return CNF, (np.array(self), self.nvars)
+        return CNF, (np.frombuffer(self), self.nvars)
 
     def equiv(self, CNF other) -> bool:
         """
