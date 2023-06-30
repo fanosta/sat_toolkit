@@ -1,7 +1,7 @@
 #cython: language_level=3, annotation_typing=True, embedsignature=True, boundscheck=False, wraparound=False, cdivision=True
 #distutils: language = c++
 cimport cython
-from cpython cimport PyBUF_FORMAT, PyBUF_ND, PyBUF_STRIDES
+from cpython cimport PyBUF_FORMAT, PyBUF_ND, PyBUF_STRIDES, PyErr_CheckSignals
 from libcpp.vector cimport vector
 from libc.stdio cimport printf, snprintf, sscanf
 from libc.stdlib cimport malloc, free
@@ -617,11 +617,11 @@ cdef class CNF:
         current_sol_view = current_sol
         current_sol_view[0] = 0
 
-        with nogil:
-            for i in range((<uint64_t> 1) << self.nvars):
-                for j in range(1, self.nvars + 1):
-                    current_sol_view[j] = (i >> (j - 1)) & 1
-                truthtable_view[i] = self._check_solution(current_sol_view)
+        for i in range((<uint64_t> 1) << self.nvars):
+            for j in range(1, self.nvars + 1):
+                current_sol_view[j] = (i >> (j - 1)) & 1
+            truthtable_view[i] = self._check_solution(current_sol_view)
+            PyErr_CheckSignals()
 
         return Truthtable.from_lut(truthtable)
 
