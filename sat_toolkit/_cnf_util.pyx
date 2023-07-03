@@ -390,7 +390,7 @@ cdef class CNF:
 
 
 
-    cdef void _add_clauses(self, int[:] clauses) nogil:
+    cdef int _add_clauses(self, int[:] clauses) nogil except -1:
         cdef size_t l, old_len, i
 
         if self.view_count > 0:
@@ -413,6 +413,8 @@ cdef class CNF:
 
             if clauses[i] == 0 and i + 1 < l:
                 self.start_indices.push_back(old_len + i + 1)
+
+        return 0
 
     def add_clauses(self, clauses) -> None:
         cdef int[:] clauses_view = None
@@ -625,7 +627,7 @@ cdef class CNF:
 
         return self._check_solution(solution)
 
-    cdef int _check_solution(self, uint8_t[:] solution) nogil:
+    cdef int _check_solution(self, uint8_t[:] solution) nogil except -1:
         cdef size_t i, clause_pos, clause_elem
         cdef uint8_t expected
 
@@ -634,9 +636,9 @@ cdef class CNF:
 
         for i in range(self.start_indices.size()):
             if not self._check_solution_for_single_clause(i, solution):
-                return False
+                return 0
 
-        return True
+        return 1
 
     cdef int _check_solution_for_single_clause(self, size_t clause_idx, uint8_t[:] solution) nogil:
         cdef size_t clause_pos
