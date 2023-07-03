@@ -333,7 +333,7 @@ cdef class CNF:
         return res
 
     @staticmethod
-    def create_all_zero(int[:] indices not None) -> CNF:
+    def create_all_zero(const int[:] indices not None) -> CNF:
         """
         creates a CNF that asserts that all variables for the provided indices
         are zero.
@@ -358,7 +358,7 @@ cdef class CNF:
         return res
 
     @staticmethod
-    def create_all_equal(int[:] lhs not None, int[:] rhs not None):
+    def create_all_equal(const int[:] lhs not None, const int[:] rhs not None):
         "creates a CNF that asserts lhs[i] == rhs[i] for all i."
         cdef vector[int] clauses
         cdef size_t i, length
@@ -390,7 +390,7 @@ cdef class CNF:
 
 
 
-    cdef int _add_clauses(self, int[:] clauses) nogil except -1:
+    cdef int _add_clauses(self, const int[:] clauses) nogil except -1:
         cdef size_t l, old_len, i
 
         if self.view_count > 0:
@@ -417,7 +417,7 @@ cdef class CNF:
         return 0
 
     def add_clauses(self, clauses) -> None:
-        cdef int[:] clauses_view = None
+        cdef const int[:] clauses_view = None
 
         try:
             clauses_view = clauses
