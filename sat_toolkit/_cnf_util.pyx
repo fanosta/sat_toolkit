@@ -49,6 +49,11 @@ cdef int startswith(const unsigned char[:] buf, const char *start) nogil:
         return 0
     return strncmp(<const char *> &buf[0], <const char *> &start[0], l) == 0
 
+cdef int abs(int val) nogil:
+    if val > 0:
+        return val
+    return -val
+
 
 cdef class Clause:
     cdef vector[int] clause
@@ -220,9 +225,7 @@ cdef class CNF:
     clause.
 
     For example, the CNF (x1 or not x2) and (x2 or x3) can be represented as
-    CNF([1, -2, 0, 2, 3, 0])
-
-
+    CNF([1, -2, 0, 2, 3, 0]).
     """
     cdef readonly vector[int] clauses
     cdef readonly vector[size_t] start_indices
@@ -330,7 +333,7 @@ cdef class CNF:
         return res
 
     @staticmethod
-    def create_all_zero(int[:] indices) -> CNF:
+    def create_all_zero(int[:] indices not None) -> CNF:
         """
         creates a CNF that asserts that all variables for the provided indices
         are zero.
@@ -355,7 +358,7 @@ cdef class CNF:
         return res
 
     @staticmethod
-    def create_all_equal(int[:] lhs, int[:] rhs):
+    def create_all_equal(int[:] lhs not None, int[:] rhs not None):
         "creates a CNF that asserts lhs[i] == rhs[i] for all i."
         cdef vector[int] clauses
         cdef size_t i, length
@@ -387,7 +390,7 @@ cdef class CNF:
 
 
 
-    cdef void _add_clauses(self, int[:] clauses):
+    cdef void _add_clauses(self, int[:] clauses) nogil:
         cdef size_t l, old_len, i
 
         if self.view_count > 0:
