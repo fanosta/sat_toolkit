@@ -329,6 +329,63 @@ cdef class CNF:
         res.nvars = numbits
         return res
 
+    @staticmethod
+    def create_all_zero(int[:] indices) -> CNF:
+        """
+        creates a CNF that asserts that all variables for the provided indices
+        are zero.
+        """
+        cdef vector[int] clauses
+        cdef size_t i, l
+        cdef int val
+
+        l = indices.shape[0]
+
+        clauses.resize(l * 2)
+        for i in range(l):
+            val = indices[i]
+            if val == 0:
+                raise ValueError('all indices must be nonzero')
+            clauses[2*i] = -val
+
+
+        cdef CNF res = CNF.__new__(CNF)
+        if clauses.size() > 0:
+            res._add_clauses(<int[:clauses.size()]> clauses.data())
+        return res
+
+    @staticmethod
+    def create_all_equal(int[:] lhs, int[:] rhs):
+        "creates a CNF that asserts lhs[i] == rhs[i] for all i."
+        cdef vector[int] clauses
+        cdef size_t i, length
+        cdef int l, r
+
+        length = lhs.shape[0]
+        if rhs.shape[0] != length:
+            raise ValueError('lhs and rhs must have the same length')
+
+        clauses.resize(length * 6)
+        for i in range(length):
+            l = lhs[i]
+            r = rhs[i]
+            if l == 0 or r == 0:
+                raise ValueError('all indices must be nonzero')
+
+            clauses[6 * i + 0] = -l
+            clauses[6 * i + 1] = r
+            clauses[6 * i + 2] = 0
+
+            clauses[6 * i + 3] = l
+            clauses[6 * i + 4] = -r
+            clauses[6 * i + 5] = 0
+
+        cdef CNF res = CNF.__new__(CNF)
+        if clauses.size() > 0:
+            res._add_clauses(<int[:clauses.size()]> clauses.data())
+        return res
+
+
 
     cdef void _add_clauses(self, int[:] clauses):
         cdef size_t l, old_len, i
@@ -672,7 +729,7 @@ cdef class CNF:
 
         if end - 1 - begin != other.clause.size():
             return 0
-        
+
         for i in range(end - 1 - begin):
             if self.clauses[begin + i] != other.clause[i]:
                 return 0
