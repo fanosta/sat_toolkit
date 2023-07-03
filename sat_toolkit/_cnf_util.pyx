@@ -358,7 +358,7 @@ cdef class CNF:
         return res
 
     @staticmethod
-    def create_all_equal(const int[:] lhs not None, const int[:] rhs not None):
+    def create_all_equal(const int[:] lhs not None, const int[:] rhs not None) -> CNF:
         "creates a CNF that asserts lhs[i] == rhs[i] for all i."
         cdef vector[int] clauses
         cdef size_t i, length
