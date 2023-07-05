@@ -1,7 +1,11 @@
 #cython: language_level=3, annotation_typing=True, embedsignature=True, boundscheck=False, wraparound=False, cdivision=True
 #distutils: language = c++
 cimport cython
-from cpython cimport PyBUF_FORMAT, PyBUF_ND, PyBUF_STRIDES, PyErr_CheckSignals
+from cython.view cimport array as cvarray
+from cpython cimport buffer
+
+from cpython.buffer cimport PyBUF_FORMAT, PyBUF_ND, PyBUF_STRIDES
+from cpython.exc cimport PyErr_CheckSignals
 from libcpp.vector cimport vector
 from libc.stdio cimport printf, snprintf, sscanf
 from libc.stdlib cimport malloc, free
@@ -388,6 +392,75 @@ cdef class CNF:
             res._add_clauses(<int[:clauses.size()]> clauses.data())
         return res
 
+    @staticmethod
+    cdef CNF _create_xor(const int[:, ::1] packed_args):
+        cdef CNF res = CNF.__new__(CNF)
+
+        cdef size_t num_inputs, num_xors
+        cdef size_t row, col, j
+        cdef size_t mask
+        cdef int rhs, var_idx
+
+        num_xors = packed_args.shape[0]
+        num_inputs = packed_args.shape[1] - 1
+
+        cdef size_t needed_space = num_inputs * ((1 << (num_inputs - 1)) + 1)
+        cdef int[::1] tmp_clause = np.empty(num_inputs + 1, np.int32)
+        tmp_clause[num_inputs] = 0
+
+
+        for row in range(num_xors):
+
+            for col in range(num_inputs):
+                if packed_args[row, col] <= 0:
+                    raise ValueError("create_xor only supports positive indexes")
+
+            rhs = packed_args[row, num_inputs]
+            if rhs not in [0, 1]:
+                raise ValueError(f"right hand side must be 0 or 1, not {rhs}")
+
+
+            for mask in range(1 << num_inputs):
+                if popcount(mask) % 2 == rhs:
+                    continue
+
+                for col in range(num_inputs):
+                    var_idx = packed_args[row, col]
+                    tmp_clause[col] = -var_idx if (mask >> col) & 1 else var_idx
+
+                res._add_clauses(tmp_clause)
+
+        return res
+
+    @staticmethod
+    def create_xor(*args, rhs=None) -> CNF:
+        """
+        creates a CNF specifying the xor of the aruments is equal to the right
+        hand side (rhs).
+
+        Each argument is a 1-D array. The xors are computed elementwise.
+        """
+        cdef size_t num_args = len(args)
+        cdef size_t num_xors = -1
+        cdef size_t i
+
+
+        if num_args < 1:
+            raise ValueError('must provide at least one argument')
+        
+        num_xors = len(args[0])
+
+        packed_args = np.zeros((num_xors, num_args + 1), np.int32)
+
+        for i, arg in enumerate(args):
+            packed_args[:, i] = arg
+
+        if rhs is not None:
+            packed_args[:, num_args] = rhs
+
+        return CNF._create_xor(packed_args)
+
+
 
 
     cdef int _add_clauses(self, const int[:] clauses) nogil except -1:
@@ -437,6 +510,11 @@ cdef class CNF:
         self._add_clauses(np_clause)
 
     append = add_clause
+
+    def __iadd__(self, clauses) -> CNF:
+        self.add_clauses(clauses)
+        return self
+
 
     def logical_or(self, int var) -> CNF:
         """
