@@ -435,7 +435,7 @@ cdef class CNF:
     @staticmethod
     def create_xor(*args, rhs=None) -> CNF:
         """
-        creates a CNF specifying the xor of the aruments is equal to the right
+        creates a CNF specifying the xor of the arguments is equal to the right
         hand side (rhs).
 
         Each argument is a 1-D array. The xors are computed elementwise.
