@@ -4,7 +4,7 @@ cimport cython
 from cython.view cimport array as cvarray
 from cpython cimport buffer
 
-from cpython.buffer cimport PyBUF_FORMAT, PyBUF_ND, PyBUF_STRIDES
+from cpython.buffer cimport PyBUF_FORMAT, PyBUF_ND, PyBUF_STRIDES, PyBUF_WRITABLE
 from cpython.exc cimport PyErr_CheckSignals
 from libcpp.vector cimport vector
 from libc.stdio cimport printf, snprintf, sscanf
@@ -885,9 +885,6 @@ cdef class CNF:
     def __repr__(self) -> str:
         return f'CNF over {self.nvars} variables with {self.start_indices.size()} clauses'
 
-    def __array__(self) -> np.array:
-        return np.frombuffer(self)
-
     def __str__(self) -> str:
         return self.to_dimacs()
 
@@ -952,25 +949,39 @@ cdef class CNF:
 
     # buffer support
     def __getbuffer__(self, cython.Py_buffer *buffer, int flags):
+        if flags & PyBUF_WRITABLE:
+            raise ValueError('cannot provide a writable buffer for CNF')
+
         self.shape[0] = self.clauses.size()
         self.view_count += 1
 
         buffer.buf = <char *>&(self.clauses[0])
+
         if (flags & PyBUF_FORMAT) == PyBUF_FORMAT:
             buffer.format = 'i'                     # int
+        else:
+            buffer.format = NULL
         buffer.internal = NULL
         buffer.itemsize = sizeof(int)
         buffer.len = self.shape[0] * sizeof(int)
-        buffer.ndim = 1
         buffer.obj = self
         buffer.readonly = 1
         if (flags & PyBUF_ND) == PyBUF_ND:
+            buffer.ndim = 1
             buffer.shape = &self.shape[0]
+        else:
+            buffer.ndim = 0
+            buffer.shape = NULL
+
         if (flags & PyBUF_STRIDES) == PyBUF_STRIDES:
             buffer.strides = &buffer.itemsize
+        else:
+            buffer.strides = NULL
+
         buffer.suboffsets = NULL                # for pointer arrays only
 
     def __releasebuffer__(self, Py_buffer *buffer):
+        buffer.buf = NULL;
         self.view_count -= 1
 
 collections.abc.Sequence.register(CNF)
