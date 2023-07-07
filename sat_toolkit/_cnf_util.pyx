@@ -495,7 +495,7 @@ cdef class CNF:
         try:
             clauses_view = clauses
         except (TypeError, ValueError):
-            np_clauses = np.array(clauses, dtype=np.int32)
+            np_clauses = np.array(clauses, copy=False, dtype=np.int32)
             clauses_view = np_clauses
 
         self._add_clauses(clauses_view)
@@ -922,7 +922,7 @@ cdef class CNF:
 
         :return: a new CNF with variables changed according to mapping parameter
         """
-        cdef np_vars = np.array(mapping, np.int32)
+        cdef np_vars = np.array(mapping, copy=False, np.int32)
         cdef int [::1] var_view = np_vars
         cdef size_t i
 
