@@ -922,7 +922,7 @@ cdef class CNF:
 
         :return: a new CNF with variables changed according to mapping parameter
         """
-        cdef np_vars = np.array(mapping, copy=False, np.int32)
+        cdef np_vars = np.array(mapping, copy=False, dtype=np.int32)
         cdef int [::1] var_view = np_vars
         cdef size_t i
 
