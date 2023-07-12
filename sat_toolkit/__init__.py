@@ -1,4 +1,4 @@
-from ._cnf_util import (
+from .formula import (
     Clause,
     CNF,
     Truthtable,
