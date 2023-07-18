@@ -736,7 +736,7 @@ cdef class CNF:
 
     def check_solution(self, uint8_t[:] solution) -> bool:
         cdef size_t i
-        for i in range(solution_len):
+        for i in range(solution.shape[0]):
            if solution[i] not in [0, 1]:
                raise ValueError(f'all elements in solution must be in [0, 1]')
 
