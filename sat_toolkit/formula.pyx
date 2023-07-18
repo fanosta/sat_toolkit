@@ -539,13 +539,50 @@ cdef class CNF:
         res._add_clauses(<int[:new_clauses.size()]> new_clauses.data())
         return res
 
-
     def implied_by(self, int var) -> CNF:
         """
         return a new CNF corresponding to (var -> self). I.e., the new CNF is
         build by appending ~var to each clause
         """
         return self.logical_or(-var)
+
+    cdef vector[int] _get_units(CNF self):
+        """
+        Returns all unit clauses in the CNF. The unit clauses are returned as 
+        a numpy array without the separating zeros.
+        """
+        cdef vector[int] units
+        cdef ssize_t idx, begin, end
+        cdef size_t numclauses = self.start_indices.size()
+
+        for idx in range(numclauses):
+            begin = self.start_indices[idx]
+            end = self.start_indices[idx + 1] if <size_t> idx + 1 < numclauses else self.clauses.size()
+
+            if end == begin + 2:
+                units.push_back(self.clauses[begin])
+
+        units.shrink_to_fit()
+
+        return units
+
+    def get_units(self) -> np.ndarray:
+        """
+        Returns all unit clauses in the CNF. The unit clauses are returned as 
+        a numpy array without the separating zeros.
+        """
+        cdef vector[int] vec_result
+        cdef int[::1] result_view
+        cdef ssize_t idx
+
+        vec_result = self._get_units()
+        result = np.empty(vec_result.size(), dtype=np.int32)
+        result_view = result
+
+        for idx in range(vec_result.size()):
+            result_view[idx] = vec_result[idx]
+
+        return result
 
 
     def to_dimacs(self) -> str:
