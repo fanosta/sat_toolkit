@@ -82,7 +82,7 @@ cdef class Clause:
 
         return res
 
-    def to_linear_constraint(self, variables: List):
+    def to_linear_constraint(self, variables: list):
         """
         return the current clause as a linear constraint suitable for MILP modeling.
         the resulting constraint is suitable if all variables are constrained to [0, 1].
@@ -171,7 +171,7 @@ cdef class Clause:
         for i in reversed(range(self.clause.size())):
             yield self.clause[i]
 
-    def count(self, int needle) -> size_t:
+    def count(self, int needle) -> int:
         "Return the number of times needle appears in the list."
         cdef size_t i
         cdef int c
@@ -183,7 +183,7 @@ cdef class Clause:
 
         return count
 
-    def index(self, int needle, start=None, end=None) -> size_t:
+    def index(self, int needle, start=None, end=None) -> int:
         """
         Return zero-based index in the list of the first item whose value is
         equal to needle. Raises a ValueError if there is no such item.
@@ -463,7 +463,7 @@ cdef class CNF:
 
 
 
-    cdef int _add_clauses(self, const int[:] clauses) nogil except -1:
+    cdef int _add_clauses(self, const int[:] clauses) except -1 nogil:
         cdef size_t l, old_len, i
 
         if self.view_count > 0:
@@ -742,7 +742,7 @@ cdef class CNF:
 
         return self._check_solution(solution)
 
-    cdef int _check_solution(self, uint8_t[:] solution) nogil except -1:
+    cdef int _check_solution(self, uint8_t[:] solution) except -1 nogil:
         cdef size_t i, clause_pos, clause_elem
         cdef uint8_t expected
 
@@ -836,7 +836,7 @@ cdef class CNF:
         for i in reversed(range(self.start_indices.size())):
             yield self.get_clause(i)
 
-    cdef int _compare_clause(self, size_t idx, Clause other) nogil except -1:
+    cdef int _compare_clause(self, size_t idx, Clause other) except -1 nogil:
         cdef size_t begin, end, i
         cdef size_t numclauses = self.start_indices.size()
 
@@ -881,7 +881,7 @@ cdef class CNF:
             return self.start_indices.size()
         return <size_t> idx
 
-    def index(self, Clause needle, start=None, end=None) -> size_t:
+    def index(self, Clause needle, start=None, end=None) -> int:
         """
         Return zero-based index in the list of the first item whose value is
         equal to needle. Raises a ValueError if there is no such item.
