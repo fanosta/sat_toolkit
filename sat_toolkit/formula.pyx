@@ -40,20 +40,20 @@ from tempfile import NamedTemporaryFile
 import collections
 
 from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from typing import *
+# if TYPE_CHECKING:
+#     from typing import *
 
 from dataclasses import dataclass
 
 __all__ = ['Clause', 'CNF', 'Truthtable']
 
-cdef int startswith(const unsigned char[:] buf, const char *start) nogil:
+cdef int startswith(const unsigned char[:] buf, const char *start) noexcept nogil:
     cdef ssize_t l = strlen(start)
     if buf.shape[0] < l:
         return 0
     return strncmp(<const char *> &buf[0], <const char *> &start[0], l) == 0
 
-cdef int abs(int val) nogil:
+cdef int abs(int val) noexcept nogil:
     if val > 0:
         return val
     return -val
@@ -729,10 +729,80 @@ cdef class CNF:
         if timeout is not None:
             args += ['-T', f'{timeout}']
 
-        with NamedTemporaryFile(prefix='lingeling_', suffix='.dimacs') as f:
+        with NamedTemporaryFile(prefix='lingeling_', suffix='.cnf') as f:
             args += ['-o', f.name]
             args += extra_args
             return self._minimize_dimacs(args, f.name)
+
+
+
+    def solve_dimacs(self, command: List[str], verbose=False) -> np.array:
+        """
+        solves the SAT by calling a DIMACS the compliant sat solver given by command.
+
+        Returns (True, np.array(model, dtype=np.uint8)) for SAT instances.
+        Returns (False, None) for UNSAT instances.
+        """
+        cdef int echo_comments, ret_code = 0
+        cdef uint8_t[:] result_view
+
+        result = np.full(self.nvars + 1, 255, dtype=np.uint8)
+        result_view = result
+        echo_comments = verbose
+        
+        cdef int32_t[::1] buf = None;
+        cdef int32_t lit
+        cdef ssize_t i
+        cdef bint is_sat = False
+
+
+        with NamedTemporaryFile('w', prefix='cnf_toolkit_', suffix='.cnf') as f:
+            f.write(self.to_dimacs())
+            f.flush()
+
+            args = command + [f.name]
+            with sp.Popen(args, stdin=sp.DEVNULL, stdout=sp.PIPE, text=True) as solver:
+
+                for line in solver.stdout:
+                    if echo_comments:
+                        print(line, end='')
+
+                    if line.startswith('c '):
+                        continue
+
+                    if line.startswith('s '):
+                        line = line[2:].strip()
+                        if line == 'SATISFIABLE':
+                            is_sat = True
+                        elif line == 'UNSATISFIABLE':
+                            is_sat = False
+                        else:
+                            raise ValueError(f'unknown status: {line}')
+
+                    if line.startswith('v '):
+                        buf = np.fromstring(line[2:], dtype=np.int32, sep=' ')
+                        for i in range(buf.shape[0]):
+                            lit = buf[i]
+                            if abs(lit) >= result_view.shape[0]:
+                                raise IndexError('solver returned model index that is out of bounds')
+                            result_view[abs(lit)] = lit > 0
+
+
+                ret_code = solver.wait()
+                if ret_code not in [10, 20]:
+                    # for SAT solvers ret_code == 10 corresponds to SATISFIABLE and
+                    # ret == 20 to UNSATISFIABLE (see for example
+                    # http://www.satcompetition.org/2004/format-solvers2004.html)
+                    raise sp.CalledProcessError(ret_code, ' '.join(solver.args))
+                
+                is_sat = ret_code == 10
+            
+            if is_sat:
+                return True, result
+            else:
+                return False, None
+
+
 
     def check_solution(self, uint8_t[:] solution) -> bool:
         cdef size_t i
