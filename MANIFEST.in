@@ -1,3 +1,4 @@
 include sat_toolkit/*.h
+include sat_toolkit/*.cpp
 include sat_toolkit/*.pyx
 include sat_toolkit/*.pxd
