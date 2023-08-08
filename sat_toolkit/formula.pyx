@@ -447,7 +447,7 @@ cdef class CNF:
 
         if num_args < 1:
             raise ValueError('must provide at least one argument')
-        
+
         num_xors = len(args[0])
 
         packed_args = np.zeros((num_xors, num_args + 1), np.int32)
@@ -520,6 +520,19 @@ cdef class CNF:
         """
         return a new CNF corresponding to (var or self). I.e., the new CNF is
         build by appending var to each clause
+
+        >>> cnf = CNF([1,2,0, -1,-2,0])
+        >>> print(cnf.logical_or(5))
+        p cnf 5 2
+        1 2 5 0
+        -1 -2 5 0
+
+
+        >>> cnf = CNF([1,2,0, -1,-2,0])
+        >>> print(cnf.logical_or(-5))
+        p cnf 5 2
+        1 2 -5 0
+        -1 -2 -5 0
         """
         if var == 0:
             raise ValueError("var must not be zero")
@@ -548,7 +561,7 @@ cdef class CNF:
 
     cdef vector[int] _get_units(CNF self):
         """
-        Returns all unit clauses in the CNF. The unit clauses are returned as 
+        Returns all unit clauses in the CNF. The unit clauses are returned as
         a numpy array without the separating zeros.
         """
         cdef vector[int] units
@@ -568,8 +581,12 @@ cdef class CNF:
 
     def get_units(self) -> np.ndarray:
         """
-        Returns all unit clauses in the CNF. The unit clauses are returned as 
+        Returns all unit clauses in the CNF. The unit clauses are returned as
         a numpy array without the separating zeros.
+
+        >>> cnf = CNF([1,0, 1,2,3,0, -3,0, -1,-2,0, -2,0])
+        >>> cnf.get_units()
+        array([ 1, -3, -2], dtype=int32)
         """
         cdef vector[int] vec_result
         cdef int[::1] result_view
@@ -749,7 +766,7 @@ cdef class CNF:
         result = np.full(self.nvars + 1, 255, dtype=np.uint8)
         result_view = result
         echo_comments = verbose
-        
+
         cdef int32_t[::1] buf = None;
         cdef int32_t lit
         cdef ssize_t i
@@ -794,9 +811,9 @@ cdef class CNF:
                     # ret == 20 to UNSATISFIABLE (see for example
                     # http://www.satcompetition.org/2004/format-solvers2004.html)
                     raise sp.CalledProcessError(ret_code, ' '.join(solver.args))
-                
+
                 is_sat = ret_code == 10
-            
+
             if is_sat:
                 return True, result
             else:
@@ -993,7 +1010,7 @@ cdef class CNF:
         return f'CNF over {self.nvars} variables with {self.start_indices.size()} clauses'
 
     def __str__(self) -> str:
-        return self.to_dimacs()
+        return self.to_dimacs().rstrip()
 
     # pickle support
     def __reduce__(self):
