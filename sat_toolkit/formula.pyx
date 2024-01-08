@@ -337,11 +337,16 @@ cdef class CNF:
         return res
 
     @staticmethod
-    def create_all_zero(const int[:] indices not None) -> CNF:
+    def create_all_zero(indices) -> CNF:
         """
         creates a CNF that asserts that all variables for the provided indices
         are zero.
         """
+        indices = np.array(indices, dtype=np.int32, copy=False)
+        return CNF._create_all_zero(indices)
+
+    @staticmethod
+    def _create_all_zero(const int[:] indices not None) -> CNF:
         cdef vector[int] clauses
         cdef size_t i, l
         cdef int val
@@ -362,8 +367,14 @@ cdef class CNF:
         return res
 
     @staticmethod
-    def create_all_equal(const int[:] lhs not None, const int[:] rhs not None) -> CNF:
+    def create_all_equal(lhs, rhs) -> CNF:
         "creates a CNF that asserts lhs[i] == rhs[i] for all i."
+        lhs = np.array(lhs, dtype=np.int32, copy=False)
+        rhs = np.array(rhs, dtype=np.int32, copy=False)
+        return CNF._create_all_equal(lhs, rhs)
+
+    @staticmethod
+    def _create_all_equal(const int[:] lhs not None, const int[:] rhs not None) -> CNF:
         cdef vector[int] clauses
         cdef size_t i, length
         cdef int l, r
