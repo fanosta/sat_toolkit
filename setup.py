@@ -21,7 +21,7 @@ if USE_CYTHON:
 
 setup(
     name="sat-toolkit",
-    version="0.2.1",
+    version="0.2.2",
     author="Marcel Nageler",
     author_email="marcel.nageler@iaik.tugraz.at",
     description="Tool for manipulating CNF formulas",
@@ -30,7 +30,7 @@ setup(
     url="https://github.com/fanosta/sat_toolkit",
     packages=find_packages(),
     install_requires=["numpy>=1.21"],
-    ext_modules=cythonize(extensions),
+    ext_modules=extensions,
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
