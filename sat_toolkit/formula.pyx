@@ -1025,7 +1025,7 @@ cdef class CNF:
 
     # pickle support
     def __reduce__(self):
-        return CNF, (np.frombuffer(self), self.nvars)
+        return CNF, (np.array(self), self.nvars)
 
     def equiv(self, CNF other) -> bool:
         """
