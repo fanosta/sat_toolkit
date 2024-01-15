@@ -440,6 +440,7 @@ cdef class CNF:
                     tmp_clause[col] = -var_idx if (mask >> col) & 1 else var_idx
 
                 res._add_clauses(tmp_clause)
+                PyErr_CheckSignals()
 
         return res
 
@@ -853,7 +854,7 @@ cdef class CNF:
 
         return 1
 
-    cdef int _check_solution_for_single_clause(self, size_t clause_idx, uint8_t[:] solution) nogil:
+    cdef int _check_solution_for_single_clause(self, size_t clause_idx, uint8_t[:] solution) noexcept nogil:
         cdef size_t clause_pos
         cdef uint8_t expected
         cdef int clause_elem
