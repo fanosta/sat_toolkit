@@ -7,7 +7,7 @@ from cpython.buffer cimport PyBUF_FORMAT, PyBUF_ND, PyBUF_STRIDES, PyBUF_WRITABL
 from cpython.exc cimport PyErr_CheckSignals
 from libcpp.vector cimport vector
 from libc.stdio cimport printf, snprintf, sscanf
-from libc.stdlib cimport malloc, free
+from libc.stdlib cimport malloc, free, abort
 from libc.string cimport strcpy, memset, strncmp, strlen, memcmp
 from sat_toolkit.types cimport *
 
@@ -236,21 +236,7 @@ cdef class XorClause(_BaseClause):
         return res
 
 
-
-cdef class CNF:
-    """
-    Class for storing and manipulating CNF formulas.
-
-    The CNF is represented in a format closely related to the DIMACS format.
-    A CNF is conjuction (logical AND) of clauses.
-    Each clause (logical AND) is a list of variables that ends with a 0.
-    A positive number indicates the presence of a variable in the clause while
-    a negative number indicates the presence of the negated varaible in the
-    clause.
-
-    For example, the CNF (x1 or not x2) and (x2 or x3) can be represented as
-    CNF([1, -2, 0, 2, 3, 0]).
-    """
+cdef class _ClauseList:
     cdef readonly vector[int] _clauses
     cdef readonly vector[size_t] _start_indices
 
@@ -273,7 +259,233 @@ cdef class CNF:
         self.view_count = 0
         self.nvars = 0
 
+    cdef int _add_clauses(self, const int[:] clauses) except -1 nogil:
+        cdef size_t l, old_len, i
 
+        if self.view_count > 0:
+            raise ValueError('cannot alter while referenced by buffer')
+
+        l = clauses.shape[0]
+        if l > 0 and clauses[l - 1] != 0:
+            raise ValueError('last clause not terminated with 0')
+
+        old_len = self._clauses.size()
+        self._clauses.resize(self._clauses.size() + l)
+
+        if l > 0:
+            self._start_indices.push_back(old_len)
+
+        for i in range(l):
+            self._clauses[old_len + i] = clauses[i]
+            if abs(clauses[i]) > self.nvars:
+                self.nvars = abs(clauses[i])
+
+            if clauses[i] == 0 and i + 1 < l:
+                self._start_indices.push_back(old_len + i + 1)
+
+        return 0
+
+    def add_clauses(self, clauses) -> None:
+        cdef const int[:] clauses_view = None
+
+        try:
+            clauses_view = clauses
+        except (TypeError, ValueError):
+            np_clauses = np.array(clauses, copy=False, dtype=np.int32)
+            clauses_view = np_clauses
+
+        self._add_clauses(clauses_view)
+
+    def add_clause(self, clause) -> None:
+        """Add a single clause to CNF formula. Specify the clause without trailing 0."""
+        cdef ssize_t clause_len = len(clause)
+        np_clause = np.zeros(clause_len + 1, dtype=np.int32)
+        np_clause[:clause_len] = clause
+        if np.count_nonzero(np_clause) != clause_len:
+            raise ValueError('cannot use 0 in clause')
+        self._add_clauses(np_clause)
+
+    append = add_clause
+
+    def __iadd__(self, clauses) -> CNF:
+        self.add_clauses(clauses)
+        return self
+
+
+    cdef int[::1] _get_clause(self, ssize_t idx):
+        cdef size_t begin, end, i
+        cdef size_t numclauses = self._start_indices.size()
+
+        if idx < 0:
+            idx += numclauses
+        if idx < 0 or <size_t> idx >= numclauses:
+            raise IndexError('index out of range')
+
+        begin = self._start_indices[idx]
+        end = self._start_indices[idx + 1] if <size_t> idx + 1 < numclauses else self._clauses.size()
+        return (<int[:self._clauses.size()]> self._clauses.data())[begin:end - 1]
+
+    def __reversed__(self) -> Iterable[Clause]:
+        cdef size_t i
+        for i in reversed(range(self._start_indices.size())):
+            yield self.get_clause(i)
+
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, type(self)):
+            return False
+
+        cdef _ClauseList c_other = <_ClauseList> other
+
+        if self.nvars != c_other.nvars:
+            return False
+        if self._start_indices != c_other._start_indices:
+            return False
+        if self._clauses != c_other._clauses:
+            return False
+        return True
+
+    cdef int _check_clause_type(self, _BaseClause clause) noexcept:
+        abort()
+
+    cdef int _compare_clause(self, size_t idx, _BaseClause other) except -1 nogil:
+        cdef size_t begin, end, i
+        cdef size_t numclauses = self._start_indices.size()
+
+        if idx >= numclauses:
+            with gil:
+                raise IndexError('index out of range')
+
+        begin = self._start_indices[idx]
+        end = self._start_indices[idx + 1] if <size_t> idx + 1 < numclauses else self._clauses.size()
+
+        if end - 1 - begin != other._clause.size():
+            return 0
+
+        for i in range(end - 1 - begin):
+            if self._clauses[begin + i] != other._clause[i]:
+                return 0
+
+        return 1
+
+    def __contains__(self, needle) -> bool:
+        if not self._check_clause_type(needle):
+            return False
+
+        cdef size_t i
+        cdef _BaseClause c_needle
+
+        c_needle = needle
+
+        with nogil:
+            for i in range(self._start_indices.size()):
+                if self._compare_clause(i, c_needle):
+                    return True
+
+    def count(self, needle) -> bool:
+        if not self._check_clause_type(needle):
+            return False
+
+        cdef size_t i, count = 0
+        cdef _BaseClause c_needle
+
+        c_needle = needle
+
+        with nogil:
+            for i in range(self._start_indices.size()):
+                if self._compare_clause(i, c_needle):
+                    count += 1
+        return count
+
+    cdef size_t _get_slice_index(self, ssize_t idx):
+        if idx < 0:
+            idx += self._start_indices.size()
+        if idx < 0:
+            return 0
+        if <size_t> idx >= self._start_indices.size():
+            return self._start_indices.size()
+        return <size_t> idx
+
+    def index(self, needle, start=None, end=None) -> int:
+        """
+        Return zero-based index in the list of the first item whose value is
+        equal to needle. Raises a ValueError if there is no such item.
+
+        The optional arguments start and end are interpreted as in the slice
+        notation and are used to limit the search to a particular subsequence
+        of the list. The returned index is computed relative to the beginning
+        of the full sequence rather than the start argument.
+        """
+        if not self._check_clause_type(needle):
+            raise ValueError(f'{needle} is of wrong tpe to be contained in {type(self).__name__}')
+
+        cdef size_t i, start_idx = 0, end_idx = self._start_indices.size()
+        cdef _BaseClause c_needle
+
+        if start is not None:
+            start_idx = self._get_slice_index(start)
+        if end is not None:
+            end_idx = self._get_slice_index(end)
+
+        for i in range(start_idx, end_idx):
+            if self._compare_clause(i, needle):
+                return i
+
+        raise ValueError(f'{needle} is not in {type(self).__name__}')
+
+
+    # buffer support
+    def __getbuffer__(self, cython.Py_buffer *buffer, int flags):
+        if flags & PyBUF_WRITABLE:
+            raise ValueError(f'cannot provide a writable buffer for {type(self).__name__}')
+
+        self.shape[0] = self._clauses.size()
+        self.view_count += 1
+
+        buffer.buf = <char *>&(self._clauses[0])
+
+        if (flags & PyBUF_FORMAT) == PyBUF_FORMAT:
+            buffer.format = 'i'                     # int
+        else:
+            buffer.format = NULL
+        buffer.internal = NULL
+        buffer.itemsize = sizeof(int)
+        buffer.len = self.shape[0] * sizeof(int)
+        buffer.obj = self
+        buffer.readonly = 1
+        if (flags & PyBUF_ND) == PyBUF_ND:
+            buffer.ndim = 1
+            buffer.shape = &self.shape[0]
+        else:
+            buffer.ndim = 0
+            buffer.shape = NULL
+
+        if (flags & PyBUF_STRIDES) == PyBUF_STRIDES:
+            buffer.strides = &buffer.itemsize
+        else:
+            buffer.strides = NULL
+
+        buffer.suboffsets = NULL                # for pointer arrays only
+
+    def __releasebuffer__(self, Py_buffer *buffer):
+        buffer.buf = NULL;
+        self.view_count -= 1
+
+
+cdef class CNF(_ClauseList):
+    """
+    Class for storing and manipulating CNF formulas.
+
+    The CNF is represented in a format closely related to the DIMACS format.
+    A CNF is conjuction (logical AND) of clauses.
+    Each clause (logical AND) is a list of variables that ends with a 0.
+    A positive number indicates the presence of a variable in the clause while
+    a negative number indicates the presence of the negated varaible in the
+    clause.
+
+    For example, the CNF (x1 or not x2) and (x2 or x3) can be represented as
+    CNF([1, -2, 0, 2, 3, 0]).
+    """
     @staticmethod
     cdef CNF _from_dimacs(const uint8_t[::1] dimacs):
         cdef CNF res = CNF.__new__(CNF)
@@ -491,61 +703,6 @@ cdef class CNF:
             packed_args[:, num_args] = rhs
 
         return CNF._create_xor(packed_args)
-
-
-
-
-    cdef int _add_clauses(self, const int[:] clauses) except -1 nogil:
-        cdef size_t l, old_len, i
-
-        if self.view_count > 0:
-            raise ValueError('cannot alter while referenced by buffer')
-
-        l = clauses.shape[0]
-        if l > 0 and clauses[l - 1] != 0:
-            raise ValueError('last clause not terminated with 0')
-
-        old_len = self._clauses.size()
-        self._clauses.resize(self._clauses.size() + l)
-
-        if l > 0:
-            self._start_indices.push_back(old_len)
-
-        for i in range(l):
-            self._clauses[old_len + i] = clauses[i]
-            if abs(clauses[i]) > self.nvars:
-                self.nvars = abs(clauses[i])
-
-            if clauses[i] == 0 and i + 1 < l:
-                self._start_indices.push_back(old_len + i + 1)
-
-        return 0
-
-    def add_clauses(self, clauses) -> None:
-        cdef const int[:] clauses_view = None
-
-        try:
-            clauses_view = clauses
-        except (TypeError, ValueError):
-            np_clauses = np.array(clauses, copy=False, dtype=np.int32)
-            clauses_view = np_clauses
-
-        self._add_clauses(clauses_view)
-
-    def add_clause(self, clause) -> None:
-        """Add a single clause to CNF formula. Specify the clause without trailing 0."""
-        cdef ssize_t clause_len = len(clause)
-        np_clause = np.zeros(clause_len + 1, dtype=np.int32)
-        np_clause[:clause_len] = clause
-        if np.count_nonzero(np_clause) != clause_len:
-            raise ValueError('cannot use 0 in clause')
-        self._add_clauses(np_clause)
-
-    append = add_clause
-
-    def __iadd__(self, clauses) -> CNF:
-        self.add_clauses(clauses)
-        return self
 
 
     def logical_or(self, int var) -> CNF:
@@ -921,20 +1078,6 @@ cdef class CNF:
 
         return Truthtable.from_lut(truthtable)
 
-    
-    cdef int[::1] _get_clause(self, ssize_t idx):
-        cdef size_t begin, end, i
-        cdef size_t numclauses = self._start_indices.size()
-
-        if idx < 0:
-            idx += numclauses
-        if idx < 0 or <size_t> idx >= numclauses:
-            raise IndexError('index out of range')
-
-        begin = self._start_indices[idx]
-        end = self._start_indices[idx + 1] if <size_t> idx + 1 < numclauses else self._clauses.size()
-        return (<int[:self._clauses.size()]> self._clauses.data())[begin:end - 1]
-
     cdef Clause get_clause(self, ssize_t idx):
         cdef Clause result
         result = Clause.from_memview(self._get_clause(idx))
@@ -953,93 +1096,8 @@ cdef class CNF:
             yield self.get_clause(i)
             i += 1
 
-    def __reversed__(self) -> Iterable[Clause]:
-        cdef size_t i
-        for i in reversed(range(self._start_indices.size())):
-            yield self.get_clause(i)
-
-    cdef int _compare_clause(self, size_t idx, _BaseClause other) except -1 nogil:
-        cdef size_t begin, end, i
-        cdef size_t numclauses = self._start_indices.size()
-
-        if idx >= numclauses:
-            with gil:
-                raise IndexError('index out of range')
-
-        begin = self._start_indices[idx]
-        end = self._start_indices[idx + 1] if <size_t> idx + 1 < numclauses else self._clauses.size()
-
-        if end - 1 - begin != other._clause.size():
-            return 0
-
-        for i in range(end - 1 - begin):
-            if self._clauses[begin + i] != other._clause[i]:
-                return 0
-
-        return 1
-
-    def __contains__(self, _BaseClause needle) -> bool:
-        cdef size_t i
-
-        for i in range(self._start_indices.size()):
-            if self._compare_clause(i, needle):
-                return True
-
-    def count(self, Clause needle) -> bool:
-        cdef size_t i, count = 0
-
-
-        for i in range(self._start_indices.size()):
-            if self._compare_clause(i, needle):
-                count += 1
-        return count
-
-    cdef size_t _get_slice_index(self, ssize_t idx):
-        if idx < 0:
-            idx += self._start_indices.size()
-        if idx < 0:
-            return 0
-        if <size_t> idx >= self._start_indices.size():
-            return self._start_indices.size()
-        return <size_t> idx
-
-    def index(self, Clause needle, start=None, end=None) -> int:
-        """
-        Return zero-based index in the list of the first item whose value is
-        equal to needle. Raises a ValueError if there is no such item.
-
-        The optional arguments start and end are interpreted as in the slice
-        notation and are used to limit the search to a particular subsequence
-        of the list. The returned index is computed relative to the beginning
-        of the full sequence rather than the start argument.
-        """
-
-        cdef size_t i, start_idx = 0, end_idx = self._start_indices.size()
-        if start is not None:
-            start_idx = self._get_slice_index(start)
-        if end is not None:
-            end_idx = self._get_slice_index(end)
-
-        for i in range(start_idx, end_idx):
-            if self._compare_clause(i, needle):
-                return i
-
-        raise ValueError(f'{needle} is not in CNF')
-
-
-    def __eq__(self, other) -> bool:
-        if not isinstance(other, CNF):
-            return False
-
-        cdef CNF c_other = <CNF> other
-
-        if self.nvars != c_other.nvars:
-            return False
-        if self._start_indices != c_other._start_indices:
-            return False
-        if self._clauses != c_other._clauses:
-            return False
-        return True
+    cdef int _check_clause_type(self, _BaseClause clause) noexcept:
+        return isinstance(clause, Clause)
 
     def __repr__(self) -> str:
         return f'CNF over {self.nvars} variables with {self._start_indices.size()} clauses'
@@ -1105,43 +1163,6 @@ cdef class CNF:
         cdef CNF res = CNF.__new__(CNF)
         res._add_clauses(<int[:new_clauses.size()]> new_clauses.data())
         return res
-
-    # buffer support
-    def __getbuffer__(self, cython.Py_buffer *buffer, int flags):
-        if flags & PyBUF_WRITABLE:
-            raise ValueError('cannot provide a writable buffer for CNF')
-
-        self.shape[0] = self._clauses.size()
-        self.view_count += 1
-
-        buffer.buf = <char *>&(self._clauses[0])
-
-        if (flags & PyBUF_FORMAT) == PyBUF_FORMAT:
-            buffer.format = 'i'                     # int
-        else:
-            buffer.format = NULL
-        buffer.internal = NULL
-        buffer.itemsize = sizeof(int)
-        buffer.len = self.shape[0] * sizeof(int)
-        buffer.obj = self
-        buffer.readonly = 1
-        if (flags & PyBUF_ND) == PyBUF_ND:
-            buffer.ndim = 1
-            buffer.shape = &self.shape[0]
-        else:
-            buffer.ndim = 0
-            buffer.shape = NULL
-
-        if (flags & PyBUF_STRIDES) == PyBUF_STRIDES:
-            buffer.strides = &buffer.itemsize
-        else:
-            buffer.strides = NULL
-
-        buffer.suboffsets = NULL                # for pointer arrays only
-
-    def __releasebuffer__(self, Py_buffer *buffer):
-        buffer.buf = NULL;
-        self.view_count -= 1
 
 collections.abc.Sequence.register(CNF)
 

@@ -37,6 +37,27 @@ def test_basic():
         cnf[-4]
 
 
+def test_operators():
+    cnf = CNF()
+    cnf += CNF([-1, 2, -3, 0, 4, -5, 6, 0])
+    cnf += CNF([1, 2, 3, 0])
+
+    assert len(cnf) == 3
+    assert cnf[0] == Clause([-1, 2, -3])
+    assert cnf[1] == Clause([4, -5, 6])
+    assert cnf[2] == Clause([1, 2, 3])
+
+    assert cnf[1] in cnf
+    assert XorClause(cnf[1]) not in cnf
+    assert cnf.count(XorClause(cnf[1])) == 0
+    assert cnf.count(Clause(cnf[1])) == 1
+
+    assert cnf.index(Clause(cnf[1])) == 1
+    with pytest.raises(ValueError):
+        cnf.index(XorClause(cnf[1]))
+
+
+
 def test_from_dimacs():
     dimacs = (
         "p cnf 8 2\n"
