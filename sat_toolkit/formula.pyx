@@ -44,7 +44,7 @@ import collections
 
 # from dataclasses import dataclass
 
-__all__ = ['Clause', 'CNF', 'Truthtable']
+__all__ = ['Clause', 'XorClause', 'CNF', 'XorCNF', 'Truthtable']
 
 cdef int startswith(const unsigned char[:] buf, const char *start) noexcept nogil:
     cdef ssize_t l = strlen(start)
@@ -58,7 +58,8 @@ cdef int abs(int val) noexcept nogil:
     return -val
 
 
-cdef class Clause:
+cdef class _BaseClause:
+
     cdef readonly vector[int] _clause
     def __init__(self, clause):
         cdef int c
@@ -67,19 +68,6 @@ cdef class Clause:
                 raise ValueError('cannot use 0 as part of clause')
             self._clause.push_back(c)
         self._clause.shrink_to_fit()
-
-    @staticmethod
-    cdef Clause from_memview(const int[:] clause):
-        cdef size_t i
-        cdef Clause res = Clause.__new__(Clause)
-
-        res._clause.resize(clause.shape[0])
-        for i in range(res._clause.size()):
-            if clause[i] == 0:
-                raise ValueError('cannot use 0 as part of clause')
-            res._clause[i] = clause[i]
-
-        return res
 
     def to_linear_constraint(self, variables: list):
         """
@@ -125,7 +113,7 @@ cdef class Clause:
         return self._maxvar()
 
     def __repr__(self) -> str:
-        return f'Clause({self._clause})'
+        return f'{type(self).__name__}({self._clause})'
 
     cdef size_t _get_absolute_index(self, ssize_t idx) except -1:
         if idx < 0:
@@ -203,17 +191,50 @@ cdef class Clause:
             if self._clause[i] == needle:
                 return i
 
-        raise ValueError(f'{needle} is not in Clause')
+        raise ValueError(f'{needle} is not in {type(self).__name__}')
 
     def __eq__(self, other) -> bool:
-        cdef Clause other_clause
+        if not isinstance(other, type(self)):
+            return False
+
+        cdef _BaseClause other_clause
         try:
             other_clause = other
         except TypeError:
             return False
         return self._clause == other_clause._clause
 
-collections.abc.Sequence.register(Clause)
+collections.abc.Sequence.register(_BaseClause)
+
+cdef class Clause(_BaseClause):
+    @staticmethod
+    cdef Clause from_memview(const int[:] clause):
+        cdef size_t i
+        cdef Clause res = Clause.__new__(Clause)
+
+        res._clause.resize(clause.shape[0])
+        for i in range(res._clause.size()):
+            if clause[i] == 0:
+                raise ValueError('cannot use 0 as part of clause')
+            res._clause[i] = clause[i]
+
+        return res
+
+
+cdef class XorClause(_BaseClause):
+    @staticmethod
+    cdef XorClause from_memview(const int[:] clause):
+        cdef size_t i
+        cdef XorClause res = XorClause.__new__(XorClause)
+
+        res._clause.resize(clause.shape[0])
+        for i in range(res._clause.size()):
+            if clause[i] == 0:
+                raise ValueError('cannot use 0 as part of clause')
+            res._clause[i] = clause[i]
+
+        return res
+
 
 
 cdef class CNF:
@@ -900,11 +921,10 @@ cdef class CNF:
 
         return Truthtable.from_lut(truthtable)
 
-
-    cdef Clause get_clause(self, ssize_t idx):
+    
+    cdef int[::1] _get_clause(self, ssize_t idx):
         cdef size_t begin, end, i
         cdef size_t numclauses = self._start_indices.size()
-        cdef Clause result
 
         if idx < 0:
             idx += numclauses
@@ -913,7 +933,11 @@ cdef class CNF:
 
         begin = self._start_indices[idx]
         end = self._start_indices[idx + 1] if <size_t> idx + 1 < numclauses else self._clauses.size()
-        result = Clause.from_memview((<int[:self._clauses.size()]> self._clauses.data())[begin:end - 1])
+        return (<int[:self._clauses.size()]> self._clauses.data())[begin:end - 1]
+
+    cdef Clause get_clause(self, ssize_t idx):
+        cdef Clause result
+        result = Clause.from_memview(self._get_clause(idx))
 
         return result
 
@@ -934,7 +958,7 @@ cdef class CNF:
         for i in reversed(range(self._start_indices.size())):
             yield self.get_clause(i)
 
-    cdef int _compare_clause(self, size_t idx, Clause other) except -1 nogil:
+    cdef int _compare_clause(self, size_t idx, _BaseClause other) except -1 nogil:
         cdef size_t begin, end, i
         cdef size_t numclauses = self._start_indices.size()
 
@@ -954,7 +978,7 @@ cdef class CNF:
 
         return 1
 
-    def __contains__(self, Clause needle) -> bool:
+    def __contains__(self, _BaseClause needle) -> bool:
         cdef size_t i
 
         for i in range(self._start_indices.size()):
@@ -1120,6 +1144,10 @@ cdef class CNF:
         self.view_count -= 1
 
 collections.abc.Sequence.register(CNF)
+
+
+cdef class XorCNF:
+    cdef CNF clauses
 
 
 cdef class Truthtable:

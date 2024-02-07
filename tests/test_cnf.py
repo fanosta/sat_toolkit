@@ -1,6 +1,8 @@
+import collections
 import numpy as np
+import pytest
 
-from sat_toolkit.formula import CNF, Clause
+from sat_toolkit.formula import CNF, Clause, XorClause
 
 
 def test_basic():
@@ -24,6 +26,15 @@ def test_basic():
     cnf.add_clause([-7, 8, -9])
     assert len(cnf) == 3
     assert cnf[2].maxvar == 9
+
+    assert cnf[-1] == cnf[2]
+    assert cnf[-2] == cnf[1]
+    assert cnf[-3] == cnf[0]
+
+    with pytest.raises(IndexError):
+        cnf[3]
+    with pytest.raises(IndexError):
+        cnf[-4]
 
 
 def test_from_dimacs():
@@ -140,3 +151,34 @@ def test_logical_or():
     assert len(cnf3) == 2
     assert cnf3[0] == Clause([1, 2, 3, -10])
     assert cnf3[1] == Clause([4, 5, 6, -10])
+
+def test_clause():
+    clause = Clause([1, 2, 3])
+    assert len(clause) == 3
+    assert clause[0] == 1
+    assert clause[1] == 2
+    assert clause[2] == 3
+
+    assert isinstance(clause, collections.abc.Sequence)
+
+    assert Clause([1, 2, 3]) == Clause([1, 2, 3])
+    assert Clause([1, 2, 3]) != XorClause([1, 2, 3])
+    assert XorClause([1, 2, 3]) != Clause([1, 2, 3])
+
+    xor_clause = XorClause([1, -2, 3])
+    assert len(xor_clause) == 3
+    assert xor_clause[0] == 1
+    assert xor_clause[1] == -2
+    assert xor_clause[2] == 3
+
+    with pytest.raises(IndexError):
+        xor_clause[3]
+
+    with pytest.raises(IndexError):
+        clause[3]
+
+    with pytest.raises(ValueError):
+        Clause([1, 2, 3, 0])
+
+    with pytest.raises(ValueError):
+        XorClause([1, 2, 3, 0])
