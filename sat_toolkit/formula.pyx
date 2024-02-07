@@ -1,7 +1,6 @@
 #cython: language_level=3, annotation_typing=True, embedsignature=True, boundscheck=False, wraparound=False, cdivision=True
 #distutils: language = c++
 cimport cython
-from cython.view cimport array as cvarray
 from cpython cimport buffer
 
 from cpython.buffer cimport PyBUF_FORMAT, PyBUF_ND, PyBUF_STRIDES, PyBUF_WRITABLE
@@ -33,17 +32,17 @@ cdef extern from *:
     int unlikely(int) nogil
 
 
-import io, sys
+import io
 import numpy as np
 import subprocess as sp
 from tempfile import NamedTemporaryFile
 import collections
 
-from typing import TYPE_CHECKING
+# from typing import TYPE_CHECKING
 # if TYPE_CHECKING:
 #     from typing import *
 
-from dataclasses import dataclass
+# from dataclasses import dataclass
 
 __all__ = ['Clause', 'CNF', 'Truthtable']
 
@@ -60,25 +59,25 @@ cdef int abs(int val) noexcept nogil:
 
 
 cdef class Clause:
-    cdef vector[int] clause
+    cdef readonly vector[int] _clause
     def __init__(self, clause):
         cdef int c
         for c in clause:
             if c == 0:
                 raise ValueError('cannot use 0 as part of clause')
-            self.clause.push_back(c)
-        self.clause.shrink_to_fit()
+            self._clause.push_back(c)
+        self._clause.shrink_to_fit()
 
     @staticmethod
     cdef Clause from_memview(const int[:] clause):
         cdef size_t i
         cdef Clause res = Clause.__new__(Clause)
 
-        res.clause.resize(clause.shape[0])
-        for i in range(res.clause.size()):
+        res._clause.resize(clause.shape[0])
+        for i in range(res._clause.size()):
             if clause[i] == 0:
                 raise ValueError('cannot use 0 as part of clause')
-            res.clause[i] = clause[i]
+            res._clause[i] = clause[i]
 
         return res
 
@@ -101,8 +100,8 @@ cdef class Clause:
         if <size_t> len(variables) < self._maxvar():
             raise IndexError(f'too few variables supplied')
 
-        for i in range(self.clause.size()):
-            c = self.clause[i]
+        for i in range(self._clause.size()):
+            c = self._clause[i]
             var = variables[abs(c) - 1]
             if c > 0:
                 lhs += var
@@ -115,8 +114,8 @@ cdef class Clause:
     cdef size_t _maxvar(self):
         cdef size_t i
         cdef int c, res = 0
-        for i in range(self.clause.size()):
-            c = abs(self.clause[i])
+        for i in range(self._clause.size()):
+            c = abs(self._clause[i])
             if c > res:
                 res = c
         return res
@@ -126,50 +125,50 @@ cdef class Clause:
         return self._maxvar()
 
     def __repr__(self) -> str:
-        return f'Clause({self.clause})'
+        return f'Clause({self._clause})'
 
     cdef size_t _get_absolute_index(self, ssize_t idx) except -1:
         if idx < 0:
-            idx += self.clause.size()
-        if idx < 0 or <size_t> idx >= self.clause.size():
+            idx += self._clause.size()
+        if idx < 0 or <size_t> idx >= self._clause.size():
             raise IndexError('index out of range')
         return <size_t> idx
 
     cdef size_t _get_slice_index(self, ssize_t idx):
         if idx < 0:
-            idx += self.clause.size()
+            idx += self._clause.size()
         if idx < 0:
             return 0
-        if <size_t> idx >= self.clause.size():
-            return self.clause.size()
+        if <size_t> idx >= self._clause.size():
+            return self._clause.size()
         return <size_t> idx
 
 
     def __getitem__(self, ssize_t idx) -> int:
-        return self.clause[self._get_absolute_index(idx)]
+        return self._clause[self._get_absolute_index(idx)]
 
     def __len__(self) -> int:
-        return self.clause.size()
+        return self._clause.size()
 
     def __contains__(self, int needle) -> bint:
         cdef size_t i
         cdef int c
 
-        for i in range(self.clause.size()):
-            if self.clause[i] == needle:
+        for i in range(self._clause.size()):
+            if self._clause[i] == needle:
                 return True
 
         return False
 
     def __iter__(self) -> Iterable[int]:
         cdef size_t i = 0
-        for i in range(self.clause.size()):
-            yield self.clause[i]
+        for i in range(self._clause.size()):
+            yield self._clause[i]
 
     def __reversed__(self) -> Iterable[int]:
         cdef size_t i = 0
-        for i in reversed(range(self.clause.size())):
-            yield self.clause[i]
+        for i in reversed(range(self._clause.size())):
+            yield self._clause[i]
 
     def count(self, int needle) -> int:
         "Return the number of times needle appears in the list."
@@ -177,8 +176,8 @@ cdef class Clause:
         cdef int c
         cdef size_t count = 0
 
-        for i in range(self.clause.size()):
-            if self.clause[i] == needle:
+        for i in range(self._clause.size()):
+            if self._clause[i] == needle:
                 count += 1
 
         return count
@@ -193,7 +192,7 @@ cdef class Clause:
         of the list. The returned index is computed relative to the beginning
         of the full sequence rather than the start argument.
         """
-        cdef size_t i, start_idx = 0, end_idx = self.clause.size()
+        cdef size_t i, start_idx = 0, end_idx = self._clause.size()
 
         if start is not None:
             start_idx = self._get_slice_index(start)
@@ -201,7 +200,7 @@ cdef class Clause:
             end_idx = self._get_slice_index(end)
 
         for i in range(start_idx, end_idx):
-            if self.clause[i] == needle:
+            if self._clause[i] == needle:
                 return i
 
         raise ValueError(f'{needle} is not in Clause')
@@ -212,7 +211,7 @@ cdef class Clause:
             other_clause = other
         except TypeError:
             return False
-        return self.clause == other_clause.clause
+        return self._clause == other_clause._clause
 
 collections.abc.Sequence.register(Clause)
 
@@ -231,8 +230,8 @@ cdef class CNF:
     For example, the CNF (x1 or not x2) and (x2 or x3) can be represented as
     CNF([1, -2, 0, 2, 3, 0]).
     """
-    cdef readonly vector[int] clauses
-    cdef readonly vector[size_t] start_indices
+    cdef readonly vector[int] _clauses
+    cdef readonly vector[size_t] _start_indices
 
     cdef readonly int nvars
 
@@ -485,19 +484,19 @@ cdef class CNF:
         if l > 0 and clauses[l - 1] != 0:
             raise ValueError('last clause not terminated with 0')
 
-        old_len = self.clauses.size()
-        self.clauses.resize(self.clauses.size() + l)
+        old_len = self._clauses.size()
+        self._clauses.resize(self._clauses.size() + l)
 
         if l > 0:
-            self.start_indices.push_back(old_len)
+            self._start_indices.push_back(old_len)
 
         for i in range(l):
-            self.clauses[old_len + i] = clauses[i]
+            self._clauses[old_len + i] = clauses[i]
             if abs(clauses[i]) > self.nvars:
                 self.nvars = abs(clauses[i])
 
             if clauses[i] == 0 and i + 1 < l:
-                self.start_indices.push_back(old_len + i + 1)
+                self._start_indices.push_back(old_len + i + 1)
 
         return 0
 
@@ -551,13 +550,13 @@ cdef class CNF:
 
         cdef vector[int] new_clauses
         cdef ssize_t src = 0, dst = 0
-        new_clauses.resize(self.clauses.size() + self.start_indices.size())
+        new_clauses.resize(self._clauses.size() + self._start_indices.size())
 
-        for src in range(<ssize_t> self.clauses.size()):
-            if self.clauses[src] == 0:
+        for src in range(<ssize_t> self._clauses.size()):
+            if self._clauses[src] == 0:
                 new_clauses[dst] = var
                 dst += 1
-            new_clauses[dst] = self.clauses[src]
+            new_clauses[dst] = self._clauses[src]
             dst += 1
 
         cdef CNF res = CNF.__new__(CNF)
@@ -578,14 +577,14 @@ cdef class CNF:
         """
         cdef vector[int] units
         cdef ssize_t idx, begin, end
-        cdef size_t numclauses = self.start_indices.size()
+        cdef size_t numclauses = self._start_indices.size()
 
         for idx in range(numclauses):
-            begin = self.start_indices[idx]
-            end = self.start_indices[idx + 1] if <size_t> idx + 1 < numclauses else self.clauses.size()
+            begin = self._start_indices[idx]
+            end = self._start_indices[idx + 1] if <size_t> idx + 1 < numclauses else self._clauses.size()
 
             if end == begin + 2:
-                units.push_back(self.clauses[begin])
+                units.push_back(self._clauses[begin])
 
         units.shrink_to_fit()
 
@@ -619,21 +618,21 @@ cdef class CNF:
         return the CNF formatted in the DIMACS file format
         '''
         cdef size_t max_len = snprintf(NULL, 0, "%d", -self.nvars)
-        cdef size_t nclauses = self.start_indices.size()
-        cdef ssize_t buf_size = (self.clauses.size() - nclauses) * (max_len + 1) + nclauses * (2)
+        cdef size_t nclauses = self._start_indices.size()
+        cdef ssize_t buf_size = (self._clauses.size() - nclauses) * (max_len + 1) + nclauses * (2)
         cdef char *buf = <char *> malloc(buf_size + 1)
         cdef ssize_t buf_idx = 0, written
         cdef size_t i
 
-        for i in range(self.clauses.size()):
-            if self.clauses[i] == 0:
+        for i in range(self._clauses.size()):
+            if self._clauses[i] == 0:
                 written = snprintf(&buf[buf_idx], buf_size, "0\n")
                 if written < 0:
                     assert 0
                 buf_idx += written
                 buf_size -= written
             else:
-                written = snprintf(&buf[buf_idx], buf_size, "%d ", self.clauses[i])
+                written = snprintf(&buf[buf_idx], buf_size, "%d ", self._clauses[i])
                 if written < 0:
                     assert 0
                 buf_idx += written
@@ -658,17 +657,17 @@ cdef class CNF:
         if print_numvars:
             buf_printf(&buf, ".i %d\n", self.nvars)
             buf_printf(&buf, ".o 1\n", self.nvars)
-        buf_printf(&buf, ".p %zd\n", self.start_indices.size())
+        buf_printf(&buf, ".p %zd\n", self._start_indices.size())
 
         line_buf = <char *> malloc(self.nvars + 4)
         strcpy(line_buf + self.nvars, " 1\n");
 
-        for i in range(self.start_indices.size()):
+        for i in range(self._start_indices.size()):
             memset(line_buf, b'-', self.nvars);
 
             j = 0
-            while self.clauses[self.start_indices[i] + j] != 0:
-                lit = self.clauses[self.start_indices[i] + j]
+            while self._clauses[self._start_indices[i] + j] != 0:
+                lit = self._clauses[self._start_indices[i] + j]
 
                 target_char = b'0'
                 if lit < 0:
@@ -682,7 +681,7 @@ cdef class CNF:
             buf_printf(&buf, "%s", line_buf)
 
         # handle the case of a CNF with 0 clauses, a.k.a. a tautology
-        if self.start_indices.size() == 0:
+        if self._start_indices.size() == 0:
             memset(line_buf, b'-', self.nvars);
             line_buf[self.nvars + 1] = b'0'
             buf_printf(&buf, "%s", line_buf)
@@ -848,7 +847,7 @@ cdef class CNF:
         if self.nvars >= solution.shape[0]:
             raise IndexError(f'solution of length {solution.shape[0]} too short for CNF with {self.nvars} variables')
 
-        for i in range(self.start_indices.size()):
+        for i in range(self._start_indices.size()):
             if not self._check_solution_for_single_clause(i, solution):
                 return 0
 
@@ -859,10 +858,10 @@ cdef class CNF:
         cdef uint8_t expected
         cdef int clause_elem
 
-        clause_pos = self.start_indices[clause_idx]
+        clause_pos = self._start_indices[clause_idx]
 
-        while self.clauses[clause_pos] != 0:
-            clause_elem = self.clauses[clause_pos]
+        while self._clauses[clause_pos] != 0:
+            clause_elem = self._clauses[clause_pos]
             expected = clause_elem > 0
             if clause_elem < 0:
                 clause_elem = -clause_elem
@@ -904,7 +903,7 @@ cdef class CNF:
 
     cdef Clause get_clause(self, ssize_t idx):
         cdef size_t begin, end, i
-        cdef size_t numclauses = self.start_indices.size()
+        cdef size_t numclauses = self._start_indices.size()
         cdef Clause result
 
         if idx < 0:
@@ -912,9 +911,9 @@ cdef class CNF:
         if idx < 0 or <size_t> idx >= numclauses:
             raise IndexError('index out of range')
 
-        begin = self.start_indices[idx]
-        end = self.start_indices[idx + 1] if <size_t> idx + 1 < numclauses else self.clauses.size()
-        result = Clause.from_memview((<int[:self.clauses.size()]> self.clauses.data())[begin:end - 1])
+        begin = self._start_indices[idx]
+        end = self._start_indices[idx + 1] if <size_t> idx + 1 < numclauses else self._clauses.size()
+        result = Clause.from_memview((<int[:self._clauses.size()]> self._clauses.data())[begin:end - 1])
 
         return result
 
@@ -922,35 +921,35 @@ cdef class CNF:
         return self.get_clause(idx)
 
     def __len__(self) -> int:
-        return self.start_indices.size()
+        return self._start_indices.size()
 
     def __iter__(self) -> Iterable[Clause]:
         cdef size_t i = 0
-        while i < self.start_indices.size():
+        while i < self._start_indices.size():
             yield self.get_clause(i)
             i += 1
 
     def __reversed__(self) -> Iterable[Clause]:
         cdef size_t i
-        for i in reversed(range(self.start_indices.size())):
+        for i in reversed(range(self._start_indices.size())):
             yield self.get_clause(i)
 
     cdef int _compare_clause(self, size_t idx, Clause other) except -1 nogil:
         cdef size_t begin, end, i
-        cdef size_t numclauses = self.start_indices.size()
+        cdef size_t numclauses = self._start_indices.size()
 
         if idx >= numclauses:
             with gil:
                 raise IndexError('index out of range')
 
-        begin = self.start_indices[idx]
-        end = self.start_indices[idx + 1] if <size_t> idx + 1 < numclauses else self.clauses.size()
+        begin = self._start_indices[idx]
+        end = self._start_indices[idx + 1] if <size_t> idx + 1 < numclauses else self._clauses.size()
 
-        if end - 1 - begin != other.clause.size():
+        if end - 1 - begin != other._clause.size():
             return 0
 
         for i in range(end - 1 - begin):
-            if self.clauses[begin + i] != other.clause[i]:
+            if self._clauses[begin + i] != other._clause[i]:
                 return 0
 
         return 1
@@ -958,7 +957,7 @@ cdef class CNF:
     def __contains__(self, Clause needle) -> bool:
         cdef size_t i
 
-        for i in range(self.start_indices.size()):
+        for i in range(self._start_indices.size()):
             if self._compare_clause(i, needle):
                 return True
 
@@ -966,18 +965,18 @@ cdef class CNF:
         cdef size_t i, count = 0
 
 
-        for i in range(self.start_indices.size()):
+        for i in range(self._start_indices.size()):
             if self._compare_clause(i, needle):
                 count += 1
         return count
 
     cdef size_t _get_slice_index(self, ssize_t idx):
         if idx < 0:
-            idx += self.start_indices.size()
+            idx += self._start_indices.size()
         if idx < 0:
             return 0
-        if <size_t> idx >= self.start_indices.size():
-            return self.start_indices.size()
+        if <size_t> idx >= self._start_indices.size():
+            return self._start_indices.size()
         return <size_t> idx
 
     def index(self, Clause needle, start=None, end=None) -> int:
@@ -991,7 +990,7 @@ cdef class CNF:
         of the full sequence rather than the start argument.
         """
 
-        cdef size_t i, start_idx = 0, end_idx = self.start_indices.size()
+        cdef size_t i, start_idx = 0, end_idx = self._start_indices.size()
         if start is not None:
             start_idx = self._get_slice_index(start)
         if end is not None:
@@ -1012,14 +1011,14 @@ cdef class CNF:
 
         if self.nvars != c_other.nvars:
             return False
-        if self.start_indices != c_other.start_indices:
+        if self._start_indices != c_other._start_indices:
             return False
-        if self.clauses != c_other.clauses:
+        if self._clauses != c_other._clauses:
             return False
         return True
 
     def __repr__(self) -> str:
-        return f'CNF over {self.nvars} variables with {self.start_indices.size()} clauses'
+        return f'CNF over {self.nvars} variables with {self._start_indices.size()} clauses'
 
     def __str__(self) -> str:
         return self.to_dimacs().rstrip()
@@ -1072,11 +1071,11 @@ cdef class CNF:
                 raise ValueError('variable must not be mapped to 0')
 
         cdef vector[int] new_clauses
-        new_clauses.resize(self.clauses.size())
+        new_clauses.resize(self._clauses.size())
 
         cdef int var
-        for i in range(self.clauses.size()):
-            var = self.clauses[i]
+        for i in range(self._clauses.size()):
+            var = self._clauses[i]
             new_clauses[i] = var_view[abs(var)] * (1 if var > 0 else -1)
 
         cdef CNF res = CNF.__new__(CNF)
@@ -1088,10 +1087,10 @@ cdef class CNF:
         if flags & PyBUF_WRITABLE:
             raise ValueError('cannot provide a writable buffer for CNF')
 
-        self.shape[0] = self.clauses.size()
+        self.shape[0] = self._clauses.size()
         self.view_count += 1
 
-        buffer.buf = <char *>&(self.clauses[0])
+        buffer.buf = <char *>&(self._clauses[0])
 
         if (flags & PyBUF_FORMAT) == PyBUF_FORMAT:
             buffer.format = 'i'                     # int
