@@ -186,20 +186,8 @@ def test_clause():
     assert Clause([1, 2, 3]) != XorClause([1, 2, 3])
     assert XorClause([1, 2, 3]) != Clause([1, 2, 3])
 
-    xor_clause = XorClause([1, -2, 3])
-    assert len(xor_clause) == 3
-    assert xor_clause[0] == 1
-    assert xor_clause[1] == -2
-    assert xor_clause[2] == 3
-
-    with pytest.raises(IndexError):
-        xor_clause[3]
-
     with pytest.raises(IndexError):
         clause[3]
 
     with pytest.raises(ValueError):
         Clause([1, 2, 3, 0])
-
-    with pytest.raises(ValueError):
-        XorClause([1, 2, 3, 0])

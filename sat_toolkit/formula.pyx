@@ -325,6 +325,22 @@ cdef class _ClauseList:
         end = self._start_indices[idx + 1] if <size_t> idx + 1 < numclauses else self._clauses.size()
         return (<int[:self._clauses.size()]> self._clauses.data())[begin:end - 1]
 
+    cdef _BaseClause get_clause(self, ssize_t idx):
+        raise NotImplementedError('should be implemented by subclass')
+
+    def __getitem__(self, ssize_t idx) -> Clause:
+        return self.get_clause(idx)
+
+    def __len__(self) -> int:
+        return self._start_indices.size()
+
+    def __iter__(self) -> Iterable[Clause]:
+        cdef size_t i = 0
+        while i < self._start_indices.size():
+            yield self.get_clause(i)
+            i += 1
+
+
     def __reversed__(self) -> Iterable[Clause]:
         cdef size_t i
         for i in reversed(range(self._start_indices.size())):
@@ -1084,18 +1100,6 @@ cdef class CNF(_ClauseList):
 
         return result
 
-    def __getitem__(self, ssize_t idx) -> Clause:
-        return self.get_clause(idx)
-
-    def __len__(self) -> int:
-        return self._start_indices.size()
-
-    def __iter__(self) -> Iterable[Clause]:
-        cdef size_t i = 0
-        while i < self._start_indices.size():
-            yield self.get_clause(i)
-            i += 1
-
     cdef int _check_clause_type(self, _BaseClause clause) noexcept:
         return isinstance(clause, Clause)
 
@@ -1164,11 +1168,26 @@ cdef class CNF(_ClauseList):
         res._add_clauses(<int[:new_clauses.size()]> new_clauses.data())
         return res
 
-collections.abc.Sequence.register(CNF)
+collections.abc.Sequence.register(_ClauseList)
+
+
+cdef class XorClauseList(_ClauseList):
+    """
+    Class for storing and manipulating a list of xor clauses.
+    """
+    cdef int _check_clause_type(self, _BaseClause clause) noexcept:
+        return isinstance(clause, XorClause)
+
+    cdef XorClause get_clause(self, ssize_t idx):
+        cdef XorClause result
+        result = XorClause.from_memview(self._get_clause(idx))
+
+        return result
 
 
 cdef class XorCNF:
-    cdef CNF clauses
+    cdef CNF _clauses
+    cdef XorClauseList _xors
 
 
 cdef class Truthtable:
