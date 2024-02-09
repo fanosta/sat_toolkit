@@ -2,7 +2,7 @@ import collections
 import numpy as np
 import pytest
 
-from sat_toolkit.formula import CNF, Clause, XorClause
+from sat_toolkit.formula import CNF, Clause, XorClause, XorClauseList
 
 
 def test_basic():
@@ -35,6 +35,21 @@ def test_basic():
         cnf[3]
     with pytest.raises(IndexError):
         cnf[-4]
+
+
+def test_incompatible_type():
+    cnf = CNF([1, 2, 3, 0, -4, 5, 6, 0])
+    cnf.add_clause([7, 8, -9])
+
+    cnf.add_clause(Clause([1, -3, 5]))
+
+    with pytest.raises(TypeError):
+        cnf.add_clause(XorClause([2, -4, 6]))
+
+    xor_clause_list = XorClauseList([1, 2, 0, -4, 5, 6, 8, 0])
+    with pytest.raises(TypeError):
+        cnf += xor_clause_list
+
 
 
 def test_operators():
@@ -84,6 +99,21 @@ def test_from_dimacs():
     assert cnf[0] == Clause([1, 2, 3])
     assert cnf[1] == Clause([4, 5, 6])
 
+def test_from_dimacs_format_errors():
+    with pytest.raises(ValueError):
+        CNF.from_dimacs("")
+    with pytest.raises(ValueError):
+        CNF.from_dimacs("p cnf 6 x\n")
+    with pytest.raises(ValueError):
+        CNF.from_dimacs("p cnf x 0\n")
+    with pytest.raises(ValueError):
+        CNF.from_dimacs("p cnf 6 0\np cnf 6 0\n")
+    with pytest.raises(ValueError):
+        CNF.from_dimacs("p cnf 6 1\n1 x 0\n")
+    with pytest.raises(ValueError):
+        CNF.from_dimacs("p cnf 6 1\nx 0\n")
+    with pytest.raises(ValueError):
+        CNF.from_dimacs("p cnf 6 1\nx1 0\n")
 
 def test_get_units():
     cnf = CNF()

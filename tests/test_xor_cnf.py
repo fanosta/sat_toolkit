@@ -1,8 +1,9 @@
 import collections
 import numpy as np
 import pytest
+import copy
 
-from sat_toolkit.formula import Clause, XorClause, XorClauseList
+from sat_toolkit.formula import CNF, Clause, XorClause, XorClauseList, XorCNF
 
 def test_xor_clause_list():
     xor_clauses = XorClauseList()
@@ -36,6 +37,97 @@ def test_xor_clause_list():
         xor_clauses[-4]
 
 
+def test_xor_cnf():
+    xor_cnf = XorCNF()
+    xor_cnf += CNF([1, -2, 3, 0, -4, 5, -6, 0])
+
+    xor_cnf += XorClauseList([1, 3, 6, 0, -2, 4, 5, 0])
+
+    dimacs = xor_cnf.to_dimacs()
+
+    with pytest.raises(ValueError):
+        # cannot alter while refeerenced by temoprary buffer
+        xor_cnf += xor_cnf
+
+    xor_cnf += copy.copy(xor_cnf)
+
+    dimacs = xor_cnf.to_dimacs()
+    print(dimacs)
+
+    assert dimacs == ("p cnf 6 8\n"
+                      "1 -2 3 0\n"
+                      "-4 5 -6 0\n"
+                      "1 -2 3 0\n"
+                      "-4 5 -6 0\n"
+                      "x1 3 6 0\n"
+                      "x-2 4 5 0\n"
+                      "x1 3 6 0\n"
+                      "x-2 4 5 0\n")
+
+
+def test_dimacs():
+    xor_cnf = XorCNF()
+    xor_cnf += CNF([1, -2, 3, 0, -4, 5, -6, 0])
+
+    xor_cnf += XorClauseList([1, 3, 6, 0, -2, 4, 5, 0])
+
+    dimacs = xor_cnf.to_dimacs()
+
+    assert xor_cnf.nvars == 6
+    assert dimacs == ("p cnf 6 4\n"
+                      "1 -2 3 0\n"
+                      "-4 5 -6 0\n"
+                      "x1 3 6 0\n"
+                      "x-2 4 5 0\n")
+
+    recovered_cnf = XorCNF.from_dimacs(dimacs)
+    assert recovered_cnf == xor_cnf
+
+    with pytest.raises(ValueError):
+        XorCNF.from_dimacs("")
+    with pytest.raises(ValueError):
+        XorCNF.from_dimacs("p cnf 6 x\n")
+    with pytest.raises(ValueError):
+        XorCNF.from_dimacs("p cnf x 0\n")
+    with pytest.raises(ValueError):
+        XorCNF.from_dimacs("p cnf 6 0\np cnf 6 0\n")
+
+
+
+def test_incompatible_type():
+    xor_list = XorClauseList([1, 2, 3, 0, -4, 5, 6, 0])
+    xor_list.add_clause([7, 8, -9])
+
+    xor_list.add_clause(XorClause([1, -3, 5]))
+
+    with pytest.raises(TypeError):
+        xor_list.add_clause(Clause([2, -4, 6]))
+
+    cnf = CNF([1, 2, 0, -4, 5, 6, 8, 0])
+    with pytest.raises(TypeError):
+        xor_list += cnf
+
+
+def test_pickle():
+    import pickle
+
+    xors1 = XorClauseList([1, 2, 3, 0, 4, 5, 6, 0])
+    xors2 = XorClauseList([1, 2, 3, 0, 4, 5, 6, 0], nvars=10)
+
+    xors1_pickled = pickle.dumps(xors1)
+    xors2_pickled = pickle.dumps(xors2)
+
+    xors1_loaded = pickle.loads(xors1_pickled)
+    xors2_loaded = pickle.loads(xors2_pickled)
+
+    assert xors1 == xors1_loaded
+    assert xors2 == xors2_loaded
+    assert xors2.nvars == xors2_loaded.nvars == 10
+
+    xor_cnf = XorCNF()
+    assert xor_cnf.nvars == 0
+
+
 def test_xor_clause_list_operators():
     xor_clauses = XorClauseList()
     xor_clauses += XorClauseList([-1, 2, -3, 0, 4, -5, 6, 0])
@@ -55,6 +147,15 @@ def test_xor_clause_list_operators():
     assert xor_clauses.index(XorClause(xor_clauses[2])) == 2
     with pytest.raises(ValueError):
         xor_clauses.index(Clause(xor_clauses[1]))
+
+    tmp_clauses =  XorClauseList([3, -7, -12, 0], 14)
+    assert tmp_clauses.nvars == 14
+    xor_clauses += tmp_clauses
+    assert xor_clauses.nvars == 14
+
+    xor_clauses += XorClauseList([3, -7, -16, 0])
+    assert xor_clauses.nvars == 16
+
 
 
 def test_xor_clause_list_iter():

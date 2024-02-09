@@ -285,7 +285,53 @@ cdef class _ClauseList:
 
         return 0
 
+    cdef str _to_dimacs(self, const char* clause_prefix) noexcept:
+        cdef size_t max_len = snprintf(NULL, 0, "%d", -self.nvars)
+        cdef size_t nclauses = self._start_indices.size()
+        cdef ssize_t buf_size = (self._clauses.size() - nclauses) * (max_len + 1) + nclauses * (2) + nclauses * len(clause_prefix)
+        cdef char *buf = <char *> malloc(buf_size + 1)
+        cdef ssize_t buf_idx = 0, written
+        cdef size_t i
+
+        for i in range(self._clauses.size()):
+            if i == 0 or self._clauses[i - 1] == 0:
+                written = snprintf(&buf[buf_idx], buf_size, "%s", clause_prefix)
+                if written < 0:
+                    assert 0
+                buf_idx += written
+                buf_size -= written
+
+            if self._clauses[i] == 0:
+                written = snprintf(&buf[buf_idx], buf_size, "0\n")
+                if written < 0:
+                    assert 0
+                buf_idx += written
+                buf_size -= written
+            else:
+                written = snprintf(&buf[buf_idx], buf_size, "%d ", self._clauses[i])
+                if written < 0:
+                    assert 0
+                buf_idx += written
+                buf_size -= written
+
+        assert buf_size >= 0
+        py_str = buf[:buf_idx]
+        free(buf)
+
+        return py_str.decode()
+
+
     def add_clauses(self, clauses) -> None:
+        cdef _ClauseList c_clauses = None
+
+        try:
+            c_clauses = clauses
+        except TypeError:
+            pass
+
+        if c_clauses is not None and not isinstance(c_clauses, type(self)):
+            raise TypeError(f'cannot append {type(clauses).__name__} to {type(self).__name__}')
+
         cdef const int[:] clauses_view = None
 
         try:
@@ -296,8 +342,16 @@ cdef class _ClauseList:
 
         self._add_clauses(clauses_view)
 
+        if c_clauses is not None:
+            if c_clauses.nvars > self.nvars:
+                self.nvars = c_clauses.nvars
+
     def add_clause(self, clause) -> None:
         """Add a single clause to CNF formula. Specify the clause without trailing 0."""
+
+        if isinstance(clause, _BaseClause) and not self._check_clause_type(clause):
+            raise TypeError(f'cannot append {type(clause).__name__} to {type(self).__name__}')
+
         cdef ssize_t clause_len = len(clause)
         np_clause = np.zeros(clause_len + 1, dtype=np.int32)
         np_clause[:clause_len] = clause
@@ -449,6 +503,9 @@ cdef class _ClauseList:
 
         raise ValueError(f'{needle} is not in {type(self).__name__}')
 
+    # pickle support
+    def __reduce__(self):
+        return type(self), (np.array(self), self.nvars)
 
     # buffer support
     def __getbuffer__(self, cython.Py_buffer *buffer, int flags):
@@ -502,35 +559,14 @@ cdef class CNF(_ClauseList):
     For example, the CNF (x1 or not x2) and (x2 or x3) can be represented as
     CNF([1, -2, 0, 2, 3, 0]).
     """
-    @staticmethod
-    cdef CNF _from_dimacs(const uint8_t[::1] dimacs):
-        cdef CNF res = CNF.__new__(CNF)
-        cdef const char *buf = <const char *> &dimacs[0]
-
-        cdef size_t off = -1, nclauses
-        cdef int nvars, tmp
-
-        while (sscanf(buf, "c %*[^\n]\n%zn", &off) or 1) and off != -1ULL:
-            buf += off
-            off = -1
-
-
-        off = -1
-        if (sscanf(buf, "p cnf %d %zd\n%zn", &nvars, &nclauses, &off) or 1) and off == -1ULL:
-            raise ValueError('file format error')
-        buf += off
-
-        cdef size_t remaining_len = dimacs.shape[0] - (buf - <const char *> &dimacs[0])
-        values = np.fromstring(buf[:remaining_len], dtype=np.int32, sep=' ')
-
-        res._add_clauses(values)
-        assert nvars >= res.nvars
-        res.nvars = nvars
-        return res
 
     @staticmethod
     def from_dimacs(dimacs: str) -> CNF:
-        return CNF._from_dimacs(dimacs.encode())
+        cdef XorCNF tmp = XorCNF.from_dimacs(dimacs)
+        if len(tmp._xor_clauses) > 0:
+            raise ValueError('CNF must not contain xor clauses')
+
+        return tmp._clauses
 
     @staticmethod
     def from_espresso(espresso: str) -> CNF:
@@ -1109,10 +1145,6 @@ cdef class CNF(_ClauseList):
     def __str__(self) -> str:
         return self.to_dimacs().rstrip()
 
-    # pickle support
-    def __reduce__(self):
-        return CNF, (np.array(self), self.nvars)
-
     def equiv(self, CNF other) -> bool:
         """
         Check for logical eqivalence between self and other.
@@ -1186,8 +1218,117 @@ cdef class XorClauseList(_ClauseList):
 
 
 cdef class XorCNF:
-    cdef CNF _clauses
-    cdef XorClauseList _xors
+    cdef readonly CNF _clauses
+    cdef readonly XorClauseList _xor_clauses
+
+    def __cinit__(self):
+        self._clauses = CNF.__new__(CNF)
+        self._xor_clauses = XorClauseList.__new__(XorClauseList)
+
+    def __init__(self, clauses: CNF|None=None, xor_clauses: XorClauseList|None=None):
+        if clauses is not None:
+            self._clauses.add_clauses(clauses)
+        if xor_clauses is not None:
+            self._xor_clauses.add_clauses(xor_clauses)
+
+
+    @staticmethod
+    def from_dimacs(dimacs: str) -> XorCNF:
+        cdef CNF clauses = CNF.__new__(CNF)
+        cdef XorClauseList xors = XorClauseList.__new__(XorClauseList)
+        cdef int nvars = -1
+        cdef int nclauses = -1
+        
+        lines = io.StringIO(dimacs)
+
+        for line in lines:
+            if line.startswith('c'):
+                continue
+
+            if line.startswith('p cnf '):
+                if nvars != -1:
+                    raise ValueError('multiple p cnf lines in dimacs')
+
+                tmp_nvars, tmp_nclauses = line[len('p cnf '):].split()
+                nvars = int(tmp_nvars)
+                nclaues = int(tmp_nclauses)
+
+            elif line.startswith('x'):
+                xors.add_clauses([int(x) for x in line[1:].split()])
+            else:
+                clauses.add_clauses([int(x) for x in line.split()])
+
+        if nvars == -1:
+            raise ValueError('no \'p cnf ...\' line in dimacs')
+
+        if nvars < max(clauses.nvars, xors.nvars):
+            raise ValueError('nvars in p cnf line is smaller than the biggest encountered variable')
+
+        clauses.nvars = nvars
+        xors.nvars = nvars
+
+        return XorCNF(clauses=clauses, xor_clauses=xors)
+
+
+    def add_clauses(self, clauses):
+        self._clauses.add_clauses(clauses)
+
+    def add_xor_clauses(self, xor_clauses):
+        self._xor_clauses.add_clauses(xor_clauses)
+
+    cdef int _nvars(self):
+        return max(self._clauses.nvars, self._xor_clauses.nvars)
+
+    @property
+    def nvars(self) -> int:
+        return self._nvars()
+
+    @property
+    def nclauses(self) -> int:
+        return len(self._clauses)
+
+    @property
+    def nxor_clauses(self) -> int:
+        return len(self._xor_clauses)
+
+    def __repr__(self) -> str:
+        return f'XorCNF over {self._nvars()} variables with {len(self._clauses)} clauses and {len(self._xor_clauses)} xor clauses'
+
+    def __str__(self) -> str:
+        return self.to_dimacs().rstrip()
+
+    def __iadd__(self, other):
+        if isinstance(other, CNF):
+            self._clauses._add_clauses(other)
+        elif isinstance(other, XorClauseList):
+            self._xor_clauses._add_clauses(other)
+        elif isinstance(other, XorCNF):
+            self._clauses._add_clauses((<XorCNF> other)._clauses)
+            self._xor_clauses._add_clauses((<XorCNF> other)._xor_clauses)
+        else:
+            raise ValueError(f'cannot add {type(other).__name__} to {type(self).__name__}')
+
+        return self
+
+
+    def to_dimacs(self) -> str:
+        '''
+        return the XorCNF formatted in the extended DIMACS file format
+        '''
+        return f'p cnf {self._nvars()} {len(self._clauses) + len(self._xor_clauses)}\n{self._clauses._to_dimacs("")}{self._xor_clauses._to_dimacs("x")}'
+
+    def __reduce__(self):
+        return type(self), (self._clauses, self._xor_clauses)
+
+    def __eq__(self, other):
+        cdef XorCNF c_other
+
+        try:
+            c_other = other
+        except TypeError:
+            return False
+
+        return self._clauses == c_other._clauses and self._xor_clauses == c_other._xor_clauses
 
 
 cdef class Truthtable:
