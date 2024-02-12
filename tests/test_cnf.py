@@ -2,7 +2,7 @@ import collections
 import numpy as np
 import pytest
 
-from sat_toolkit.formula import CNF, Clause, XorClause, XorClauseList
+from sat_toolkit.formula import CNF, Clause, XorClause, XorClauseList, Truthtable
 
 
 def test_basic():
@@ -221,3 +221,50 @@ def test_clause():
 
     with pytest.raises(ValueError):
         Clause([1, 2, 3, 0])
+
+def test_to_cnf():
+    lut = np.zeros(16, dtype=np.int8)
+    lut[[0, 6, 9, 15]] = 1
+
+    tt = Truthtable.from_lut(lut)
+    cnf = tt.to_cnf()
+    cnf_ref = CNF.create_xor([1, 2], [4, 3])
+
+    assert cnf.equiv(cnf_ref)
+
+
+def test_create_xor():
+    cnf_equal = CNF.create_xor([1], [2])
+    assert len(cnf_equal) == 2
+    assert Clause([1, -2]) in cnf_equal
+    assert Clause([-1, 2]) in cnf_equal
+
+    cnf_not_equal = CNF.create_xor([1], [2], rhs=[1])
+    assert len(cnf_not_equal) == 2
+    assert Clause([1, 2]) in cnf_not_equal
+    assert Clause([-1, -2]) in cnf_not_equal
+
+    assert cnf_not_equal.equiv(CNF.create_xor([-1], [2]))
+    assert cnf_not_equal.equiv(CNF.create_xor([1], [-2]))
+
+    with pytest.raises(ValueError):
+        CNF.create_xor(rhs=[1])
+
+    cnf_xor3 = CNF.create_xor([1], [2], [3])
+    assert len(cnf_xor3) == 4
+    assert Clause([1, 2, -3]) in cnf_xor3
+    assert Clause([1, -2, 3]) in cnf_xor3
+    assert Clause([-1, 2, 3]) in cnf_xor3
+    assert Clause([-1, -2, -3]) in cnf_xor3
+
+    cnf_xor3_multi = CNF.create_xor([1, 4], [2, 5], [3, 6])
+    assert len(cnf_xor3_multi) == 8
+    assert Clause([1, 2, -3]) in cnf_xor3_multi
+    assert Clause([1, -2, 3]) in cnf_xor3_multi
+    assert Clause([-1, 2, 3]) in cnf_xor3_multi
+    assert Clause([-1, -2, -3]) in cnf_xor3_multi
+
+    assert Clause([4, 5, -6]) in cnf_xor3_multi
+    assert Clause([4, -5, 6]) in cnf_xor3_multi
+    assert Clause([-4, 5, 6]) in cnf_xor3_multi
+    assert Clause([-4, -5, -6]) in cnf_xor3_multi

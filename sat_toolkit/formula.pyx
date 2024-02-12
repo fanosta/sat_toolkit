@@ -2,6 +2,7 @@
 #distutils: language = c++
 cimport cython
 from cpython cimport buffer
+from libc.stdlib cimport malloc, free
 
 from cpython.buffer cimport PyBUF_FORMAT, PyBUF_ND, PyBUF_STRIDES, PyBUF_WRITABLE
 from cpython.exc cimport PyErr_CheckSignals
@@ -259,31 +260,34 @@ cdef class _ClauseList:
         self.view_count = 0
         self.nvars = 0
 
-    cdef int _add_clauses(self, const int[:] clauses) except -1 nogil:
-        cdef size_t l, old_len, i
+    cdef int _add_clauses_raw(self, const int *clauses, size_t length) except -1 nogil:
+        cdef size_t old_len, i
 
         if self.view_count > 0:
             raise ValueError('cannot alter while referenced by buffer')
 
-        l = clauses.shape[0]
-        if l > 0 and clauses[l - 1] != 0:
+        if length > 0 and clauses[length - 1] != 0:
             raise ValueError('last clause not terminated with 0')
 
         old_len = self._clauses.size()
-        self._clauses.resize(self._clauses.size() + l)
+        self._clauses.resize(self._clauses.size() + length)
 
-        if l > 0:
+        if length > 0:
             self._start_indices.push_back(old_len)
 
-        for i in range(l):
+        for i in range(length):
             self._clauses[old_len + i] = clauses[i]
             if abs(clauses[i]) > self.nvars:
                 self.nvars = abs(clauses[i])
 
-            if clauses[i] == 0 and i + 1 < l:
+            if clauses[i] == 0 and i + 1 < length:
                 self._start_indices.push_back(old_len + i + 1)
 
         return 0
+
+    cdef int _add_clauses(self, const int[:] clauses) except -1 nogil:
+        return self._add_clauses_raw(&clauses[0], clauses.shape[0])
+
 
     cdef str _to_dimacs(self, const char* clause_prefix) noexcept:
         cdef size_t max_len = snprintf(NULL, 0, "%d", -self.nvars)
@@ -687,6 +691,41 @@ cdef class CNF(_ClauseList):
             res._add_clauses(<int[:clauses.size()]> clauses.data())
         return res
 
+    cdef int _add_xor_clause(self, const int[::1] xor_clause, int rhs=0) except -1 nogil:
+        if rhs not in [0, 1]:
+            raise ValueError(f"right hand side must be 0 or 1, not {rhs}")
+
+        cdef size_t num_inputs = xor_clause.shape[0]
+        cdef size_t num_clauses = 1 << (num_inputs - 1)
+        cdef size_t mask, col
+        cdef int var_idx
+
+        cdef size_t buffer_elements = (num_clauses) * (num_inputs + 1)
+        cdef int *buffer = <int *> malloc(buffer_elements * sizeof(int))
+        cdef size_t buffer_offset = 0
+
+        try:
+            for mask in range(1 << num_inputs):
+                if popcount(mask) % 2 == rhs:
+                    continue
+
+                for col in range(num_inputs):
+                    var_idx = xor_clause[col]
+
+                    # FIXME row offset
+                    buffer[buffer_offset + col] = -var_idx if (mask >> col) & 1 else var_idx
+
+                buffer[buffer_offset + num_inputs] = 0
+
+                buffer_offset += num_inputs + 1
+
+            assert buffer_offset == buffer_elements
+            self._add_clauses_raw(buffer, buffer_elements)
+        finally:
+            free(&buffer[0])
+
+        return 0
+
     @staticmethod
     cdef CNF _create_xor(const int[:, ::1] packed_args):
         cdef CNF res = CNF.__new__(CNF)
@@ -705,26 +744,8 @@ cdef class CNF(_ClauseList):
 
 
         for row in range(num_xors):
-
-            for col in range(num_inputs):
-                if packed_args[row, col] <= 0:
-                    raise ValueError("create_xor only supports positive indexes")
-
             rhs = packed_args[row, num_inputs]
-            if rhs not in [0, 1]:
-                raise ValueError(f"right hand side must be 0 or 1, not {rhs}")
-
-
-            for mask in range(1 << num_inputs):
-                if popcount(mask) % 2 == rhs:
-                    continue
-
-                for col in range(num_inputs):
-                    var_idx = packed_args[row, col]
-                    tmp_clause[col] = -var_idx if (mask >> col) & 1 else var_idx
-
-                res._add_clauses(tmp_clause)
-                PyErr_CheckSignals()
+            res._add_xor_clause(packed_args[row, :num_inputs], rhs)
 
         return res
 
@@ -1269,6 +1290,17 @@ cdef class XorCNF:
 
         return XorCNF(clauses=clauses, xor_clauses=xors)
 
+    def to_cnf(self) -> CNF:
+        cdef CNF res = CNF.__new__(CNF)
+        cdef size_t idx
+
+        res._add_clauses(self._clauses)
+        res.nvars = self._nvars()
+
+        for idx in range(self._xor_clauses._start_indices.size()):
+            res._add_xor_clause(self._xor_clauses._get_clause(idx))
+
+        return res
 
     def add_clauses(self, clauses):
         self._clauses.add_clauses(clauses)
