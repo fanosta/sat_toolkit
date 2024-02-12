@@ -704,6 +704,10 @@ cdef class CNF(_ClauseList):
         cdef int *buffer = <int *> malloc(buffer_elements * sizeof(int))
         cdef size_t buffer_offset = 0
 
+        for col in range(num_inputs):
+            if xor_clause[col] == 0:
+                raise ValueError('all indices must be nonzero')
+
         try:
             for mask in range(1 << num_inputs):
                 if popcount(mask) % 2 == rhs:
@@ -1289,6 +1293,55 @@ cdef class XorCNF:
         xors.nvars = nvars
 
         return XorCNF(clauses=clauses, xor_clauses=xors)
+
+    @staticmethod
+    def create_xor(*args, rhs=None) -> XorCNF:
+        """
+        creates an XorCNF specifying the xor of the arguments is equal to the right
+        hand side (rhs).
+
+        Each argument is a 1-D array. The xors are computed elementwise.
+        """
+        cdef size_t num_args = len(args)
+        cdef size_t num_xors = -1
+        cdef size_t i, j
+
+        cdef int[::1] rhs_view
+
+        try:
+            rhs_view = rhs
+        except TypeError:
+            rhs_view = np.array(rhs, dtype=np.int32)
+
+        if num_args < 1:
+            raise ValueError('must provide at least one argument')
+
+        num_xors = len(args[0])
+
+        packed_args = np.zeros((num_xors, num_args + 1), np.int32)
+
+        for i, arg in enumerate(args):
+            packed_args[:, i] = arg
+
+
+        cdef int[:, ::1] packed_args_view = packed_args
+
+        for i in range(num_xors):
+            if rhs_view is not None:
+                if rhs_view[i] not in [0, 1]:
+                    raise ValueError(f"right hand side must be 0 or 1, not {rhs_view[i]}")
+
+                if rhs_view[i] == 1:
+                    packed_args_view[i, 0] *= -1
+
+            for j in range(num_args):
+                if packed_args_view[i, j] == 0:
+                    raise ValueError('all indices must be nonzero')
+
+        cdef XorCNF res = XorCNF.__new__(XorCNF)
+        res._xor_clauses._add_clauses(packed_args.reshape(-1))
+        return res
+
 
     def to_cnf(self) -> CNF:
         cdef CNF res = CNF.__new__(CNF)

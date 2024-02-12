@@ -249,6 +249,12 @@ def test_create_xor():
 
     with pytest.raises(ValueError):
         CNF.create_xor(rhs=[1])
+    with pytest.raises(ValueError):
+        CNF.create_xor([0], [1])
+    with pytest.raises(ValueError):
+        CNF.create_xor([1, 2], [3, 0])
+    with pytest.raises(ValueError):
+        CNF.create_xor([0])
 
     cnf_xor3 = CNF.create_xor([1], [2], [3])
     assert len(cnf_xor3) == 4

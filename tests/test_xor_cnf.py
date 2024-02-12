@@ -223,3 +223,49 @@ def test_to_cnf():
     assert Clause([4, -5, 6]) in cnf_xor3_multi
     assert Clause([-4, 5, 6]) in cnf_xor3_multi
     assert Clause([-4, -5, -6]) in cnf_xor3_multi
+
+def test_create_xor():
+    cnf_equal = XorCNF.create_xor([1], [2]).to_cnf()
+    assert len(cnf_equal) == 2
+    assert Clause([1, -2]) in cnf_equal
+    assert Clause([-1, 2]) in cnf_equal
+
+    cnf_not_equal = XorCNF.create_xor([1], [2], rhs=[1]).to_cnf()
+    assert len(cnf_not_equal) == 2
+    assert Clause([1, 2]) in cnf_not_equal
+    assert Clause([-1, -2]) in cnf_not_equal
+
+    assert cnf_not_equal.equiv(XorCNF.create_xor([-1], [2]).to_cnf())
+    assert cnf_not_equal.equiv(XorCNF.create_xor([1], [-2]).to_cnf())
+
+    with pytest.raises(ValueError):
+        XorCNF.create_xor(rhs=[1])
+
+    cnf_xor3 = XorCNF.create_xor([1], [2], [3]).to_cnf()
+    assert len(cnf_xor3) == 4
+    assert Clause([1, 2, -3]) in cnf_xor3
+    assert Clause([1, -2, 3]) in cnf_xor3
+    assert Clause([-1, 2, 3]) in cnf_xor3
+    assert Clause([-1, -2, -3]) in cnf_xor3
+
+    with pytest.raises(ValueError):
+        XorCNF.create_xor(rhs=[1])
+    with pytest.raises(ValueError):
+        XorCNF.create_xor([0], [1])
+    with pytest.raises(ValueError):
+        XorCNF.create_xor([1, 2], [3, 0])
+    with pytest.raises(ValueError):
+        XorCNF.create_xor([0])
+
+    cnf_xor3_multi = XorCNF.create_xor([1, 4], [2, 5], [3, 6]).to_cnf()
+    assert len(cnf_xor3_multi) == 8
+    assert Clause([1, 2, -3]) in cnf_xor3_multi
+    assert Clause([1, -2, 3]) in cnf_xor3_multi
+    assert Clause([-1, 2, 3]) in cnf_xor3_multi
+    assert Clause([-1, -2, -3]) in cnf_xor3_multi
+
+    assert Clause([4, 5, -6]) in cnf_xor3_multi
+    assert Clause([4, -5, 6]) in cnf_xor3_multi
+    assert Clause([-4, 5, 6]) in cnf_xor3_multi
+    assert Clause([-4, -5, -6]) in cnf_xor3_multi
+
