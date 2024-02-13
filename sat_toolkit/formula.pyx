@@ -1205,7 +1205,7 @@ cdef class CNF(_ClauseList):
         cdef size_t i
 
         if var_view.shape[0] != self.nvars + 1:
-            raise ValueError('need to provide translation for all 1+{self.nvars} variables')
+            raise ValueError(f'need to provide translation for all 1+{self.nvars} variables')
         if var_view[0] != 0:
             raise ValueError('variable 0 must map to 0 again')
 
