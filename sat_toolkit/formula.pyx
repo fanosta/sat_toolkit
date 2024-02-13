@@ -1310,7 +1310,7 @@ cdef class XorCNF:
 
         try:
             rhs_view = rhs
-        except TypeError:
+        except (TypeError, ValueError):
             rhs_view = np.array(rhs, dtype=np.int32)
 
         if num_args < 1:

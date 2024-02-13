@@ -230,7 +230,7 @@ def test_create_xor():
     assert Clause([1, -2]) in cnf_equal
     assert Clause([-1, 2]) in cnf_equal
 
-    cnf_not_equal = XorCNF.create_xor([1], [2], rhs=[1]).to_cnf()
+    cnf_not_equal = XorCNF.create_xor([1], [2], rhs=np.array([1])).to_cnf()
     assert len(cnf_not_equal) == 2
     assert Clause([1, 2]) in cnf_not_equal
     assert Clause([-1, -2]) in cnf_not_equal
