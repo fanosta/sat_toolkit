@@ -225,7 +225,7 @@ def test_to_cnf():
     assert Clause([-4, -5, -6]) in cnf_xor3_multi
 
 def test_create_xor():
-    cnf_equal = XorCNF.create_xor([1], [2]).to_cnf()
+    cnf_equal = XorCNF.create_xor(np.array([1]), np.array([2], dtype=np.int32)).to_cnf()
     assert len(cnf_equal) == 2
     assert Clause([1, -2]) in cnf_equal
     assert Clause([-1, 2]) in cnf_equal
