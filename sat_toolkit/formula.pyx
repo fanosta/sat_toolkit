@@ -1019,7 +1019,7 @@ cdef class CNF(_ClauseList):
 
 
 
-    def solve_dimacs(self, command: List[str], verbose=False) -> np.array:
+    def solve_dimacs(self, command: List[str], verbose=False) -> Tuple[bool, np.array|None]:
         """
         solves the SAT by calling a DIMACS the compliant sat solver given by command.
 
@@ -1039,7 +1039,7 @@ cdef class CNF(_ClauseList):
         cdef bint is_sat = False
 
 
-        with NamedTemporaryFile('w', prefix='cnf_toolkit_', suffix='.cnf') as f:
+        with NamedTemporaryFile('w', prefix='sat_toolkit_', suffix='.cnf') as f:
             f.write(self.to_dimacs())
             f.flush()
 
@@ -1414,6 +1414,75 @@ cdef class XorCNF:
             return False
 
         return self._clauses == c_other._clauses and self._xor_clauses == c_other._xor_clauses
+
+    def solve_dimacs(self, command: List[str]=['cryptominisat5'], verbose=False) -> Tuple[bool, np.array|None]:
+        """
+        solves the SAT by calling a DIMACS compliant sat solver that also
+        supports XORs given by command. The solver defaults to cryptominisat5.
+        For other solvers that do not support XORs,
+        self.to_cnf().solve_dimacs() can be used.
+
+        Returns (True, np.array(model, dtype=np.uint8)) for SAT instances.
+        Returns (False, None) for UNSAT instances.
+        """
+        cdef int echo_comments, ret_code = 0
+        cdef uint8_t[:] result_view
+
+        result = np.full(self.nvars + 1, 255, dtype=np.uint8)
+        result_view = result
+        echo_comments = verbose
+
+        cdef int32_t[::1] buf = None;
+        cdef int32_t lit
+        cdef ssize_t i
+        cdef bint is_sat = False
+
+
+        with NamedTemporaryFile('w', prefix='sat_toolkit_', suffix='.cnf') as f:
+            f.write(self.to_dimacs())
+            f.flush()
+
+            args = command + [f.name]
+            with sp.Popen(args, stdin=sp.DEVNULL, stdout=sp.PIPE, text=True) as solver:
+
+                for line in solver.stdout:
+                    if echo_comments:
+                        print(line, end='')
+
+                    if line.startswith('c '):
+                        continue
+
+                    if line.startswith('s '):
+                        line = line[2:].strip()
+                        if line == 'SATISFIABLE':
+                            is_sat = True
+                        elif line == 'UNSATISFIABLE':
+                            is_sat = False
+                        else:
+                            raise ValueError(f'unknown status: {line}')
+
+                    if line.startswith('v '):
+                        buf = np.fromstring(line[2:], dtype=np.int32, sep=' ')
+                        for i in range(buf.shape[0]):
+                            lit = buf[i]
+                            if abs(lit) >= result_view.shape[0]:
+                                raise IndexError('solver returned model index that is out of bounds')
+                            result_view[abs(lit)] = lit > 0
+
+
+                ret_code = solver.wait()
+                if ret_code not in [10, 20]:
+                    # for SAT solvers ret_code == 10 corresponds to SATISFIABLE and
+                    # ret == 20 to UNSATISFIABLE (see for example
+                    # http://www.satcompetition.org/2004/format-solvers2004.html)
+                    raise sp.CalledProcessError(ret_code, ' '.join(solver.args))
+
+                is_sat = ret_code == 10
+
+            if is_sat:
+                return True, result
+            else:
+                return False, None
 
 
 cdef class Truthtable:
