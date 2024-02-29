@@ -1,4 +1,4 @@
-#cython: language_level=3, annotation_typing=True, embedsignature=True, boundscheck=True, wraparound=False, cdivision=True
+#cython: language_level=3, annotation_typing=True, embedsignature=True, boundscheck=False, wraparound=False, cdivision=True
 #distutils: language = c++
 cimport cython
 from cpython cimport buffer
@@ -1373,7 +1373,7 @@ cdef class XorCNF:
     def add_xor_clauses(self, xor_clauses):
         self._xor_clauses.add_clauses(xor_clauses)
 
-    cdef int _nvars(self):
+    cdef int _nvars(self) noexcept:
         return max(self._clauses.nvars, self._xor_clauses.nvars)
 
     @property
@@ -1397,11 +1397,15 @@ cdef class XorCNF:
     def __iadd__(self, other):
         if isinstance(other, CNF):
             self._clauses._add_clauses(other)
+            self._clauses.nvars = max(self._nvars(), (<CNF> other).nvars)
         elif isinstance(other, XorClauseList):
             self._xor_clauses._add_clauses(other)
+            self._xor_clauses.nvars = max(self._nvars(), (<XorClauseList> other).nvars)
         elif isinstance(other, XorCNF):
             self._clauses._add_clauses((<XorCNF> other)._clauses)
             self._xor_clauses._add_clauses((<XorCNF> other)._xor_clauses)
+            self._clauses.nvars = max(self._nvars(), (<XorCNF> other)._nvars())
+            self._xor_clauses.nvars = max(self._nvars(), (<XorCNF> other)._nvars())
         else:
             raise ValueError(f'cannot add {type(other).__name__} to {type(self).__name__}')
 
@@ -1425,7 +1429,10 @@ cdef class XorCNF:
         except TypeError:
             return False
 
-        return self._clauses == c_other._clauses and self._xor_clauses == c_other._xor_clauses
+        if self._nvars() != c_other._nvars():
+            return False
+        
+        return self._clauses._clauses == c_other._clauses._clauses and self._xor_clauses._clauses == c_other._xor_clauses._clauses
 
     def solve_dimacs(self, command: List[str]=['cryptominisat5'], verbose=False) -> Tuple[bool, np.array|None]:
         """

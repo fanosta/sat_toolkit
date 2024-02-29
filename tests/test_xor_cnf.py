@@ -5,6 +5,8 @@ import copy
 
 from sat_toolkit.formula import CNF, Clause, XorClause, XorClauseList, XorCNF
 
+from icecream import ic
+
 def test_xor_clause_list():
     xor_clauses = XorClauseList()
     assert len(xor_clauses) == 0
@@ -62,6 +64,42 @@ def test_xor_cnf():
                       "x-2 4 5 0\n"
                       "x1 3 6 0\n"
                       "x-2 4 5 0\n")
+
+def test_equal():
+    a = XorCNF()
+
+    a += CNF([1, 2, 3, 0], nvars=6)
+    
+    a += XorClauseList([1, 3, 6, 0])
+
+    ic(a._clauses.nvars)
+    ic(a._xor_clauses.nvars)
+
+
+    b = XorCNF()
+    b += CNF([1, 2, 3, 0], nvars=3)
+    b += XorClauseList([1, 3, 6, 0])
+
+    assert a.nvars == 6
+    assert b.nvars == 6
+    assert a == b
+
+def test_equal_2():
+    a = XorCNF()
+    a._clauses.add_clauses(CNF([1, 2, 3, 0], nvars=6))
+    a._xor_clauses.add_clauses(XorClauseList([1, 3, 6, 0]))
+
+    b = XorCNF()
+    b._clauses.add_clauses(CNF([1, 2, 3, 0], nvars=3))
+    b._xor_clauses.add_clauses(XorClauseList([1, 3, 6, 0]))
+
+    assert a._clauses.nvars == 6
+    assert a._xor_clauses.nvars == 6
+
+    assert b._clauses.nvars == 3
+    assert b._xor_clauses.nvars == 6
+
+    assert a == b
 
 
 def test_dimacs():
