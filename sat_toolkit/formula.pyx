@@ -1,4 +1,4 @@
-#cython: language_level=3, annotation_typing=True, embedsignature=True, boundscheck=False, wraparound=False, cdivision=True
+#cython: language_level=3, annotation_typing=True, embedsignature=True, boundscheck=True, wraparound=False, cdivision=True
 #distutils: language = c++
 cimport cython
 from cpython cimport buffer
@@ -286,6 +286,8 @@ cdef class _ClauseList:
         return 0
 
     cdef int _add_clauses(self, const int[:] clauses) except -1 nogil:
+        if clauses.shape[0] == 0:
+            return 0
         return self._add_clauses_raw(&clauses[0], clauses.shape[0])
 
 
@@ -758,6 +760,8 @@ cdef class CNF(_ClauseList):
         """
         creates a CNF specifying the xor of the arguments is equal to the right
         hand side (rhs).
+
+        If rhs is None, the default value of 0 is used.
 
         Each argument is a 1-D array. The xors are computed elementwise.
         """
@@ -1300,6 +1304,9 @@ cdef class XorCNF:
         creates an XorCNF specifying the xor of the arguments is equal to the right
         hand side (rhs).
 
+        If rhs is None, the default value of 0 is used. This is in contrast to
+        the internal representation, where the default value is 1.
+
         Each argument is a 1-D array. The xors are computed elementwise.
         """
         cdef size_t num_args = len(args)
@@ -1318,6 +1325,9 @@ cdef class XorCNF:
 
         num_xors = len(args[0])
 
+        if rhs_view is not None and len(rhs_view) != num_xors:
+            raise ValueError('rhs must have the same length as the arguments')
+
         packed_args = np.zeros((num_xors, num_args + 1), np.int32)
 
         for i, arg in enumerate(args):
@@ -1327,12 +1337,14 @@ cdef class XorCNF:
         cdef int[:, ::1] packed_args_view = packed_args
 
         for i in range(num_xors):
-            if rhs_view is not None:
-                if rhs_view[i] not in [0, 1]:
-                    raise ValueError(f"right hand side must be 0 or 1, not {rhs_view[i]}")
+            if rhs_view is not None and rhs_view[i] not in [0, 1]:
+                raise ValueError(f"right hand side must be 0 or 1, not {rhs_view[i]}")
 
-                if rhs_view[i] == 1:
-                    packed_args_view[i, 0] *= -1
+            # the default rhs value in cryptominisat is 1 while our default is 0
+            # so we need to flip the first sign if rhs is 0
+            # (see https://www.msoos.org/xor-clauses/)
+            if rhs_view is None or rhs_view[i] == 0:
+                packed_args_view[i, 0] *= -1
 
             for j in range(num_args):
                 if packed_args_view[i, j] == 0:
@@ -1351,7 +1363,7 @@ cdef class XorCNF:
         res.nvars = self._nvars()
 
         for idx in range(self._xor_clauses._start_indices.size()):
-            res._add_xor_clause(self._xor_clauses._get_clause(idx))
+            res._add_xor_clause(self._xor_clauses._get_clause(idx), rhs=1)
 
         return res
 

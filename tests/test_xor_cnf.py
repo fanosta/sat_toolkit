@@ -52,7 +52,6 @@ def test_xor_cnf():
     xor_cnf += copy.copy(xor_cnf)
 
     dimacs = xor_cnf.to_dimacs()
-    print(dimacs)
 
     assert dimacs == ("p cnf 6 8\n"
                       "1 -2 3 0\n"
@@ -190,17 +189,17 @@ def test_xor_clause():
         XorClause([1, 2, 3, 0])
 
 def test_to_cnf():
-    cnf_equal = XorCNF([], [1, 2, 0]).to_cnf()
+    cnf_equal = XorCNF([], [-1, 2, 0]).to_cnf()
     assert len(cnf_equal) == 2
     assert Clause([1, -2]) in cnf_equal
     assert Clause([-1, 2]) in cnf_equal
 
-    cnf_not_equal = XorCNF([], [-1, 2, 0]).to_cnf()
+    cnf_not_equal = XorCNF([], [1, 2, 0]).to_cnf()
     assert len(cnf_not_equal) == 2
     assert Clause([1, 2]) in cnf_not_equal
     assert Clause([-1, -2]) in cnf_not_equal
 
-    assert cnf_not_equal.equiv(XorCNF([], [1, -2, 0]).to_cnf())
+    assert cnf_not_equal.equiv(XorCNF([], [1, 2, 0]).to_cnf())
 
     # with pytest.raises(ValueError):
     #     XorCNF([], [0]).to_cnf()
@@ -269,3 +268,19 @@ def test_create_xor():
     assert Clause([-4, 5, 6]) in cnf_xor3_multi
     assert Clause([-4, -5, -6]) in cnf_xor3_multi
 
+def test_solve_dimacs():
+    cnf = XorCNF.create_xor([1], [2], [3])
+    cnf += XorCNF([], [1, 3, 0])
+    cnf += CNF([1, 2, 3, 0])
+    cnf += CNF([1, -2, 0])
+
+    for seed in range(100):
+        args = ['cryptominisat5', f'--random={seed}', '--polar=rnd']
+        is_sat, result = cnf.solve_dimacs(args)
+        assert is_sat
+
+        assert result[1] ^ result[2] ^ result[3] == 0
+        assert result[1] ^ result[3] == 1
+
+        assert result[1] or result[2] or result[3] == 1
+        assert result[1] or not result[2] == 1
