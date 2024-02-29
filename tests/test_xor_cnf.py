@@ -69,7 +69,7 @@ def test_equal():
     a = XorCNF()
 
     a += CNF([1, 2, 3, 0], nvars=6)
-    
+
     a += XorClauseList([1, 3, 6, 0])
 
     ic(a._clauses.nvars)

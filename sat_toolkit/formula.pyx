@@ -1267,7 +1267,7 @@ cdef class XorCNF:
         cdef XorClauseList xors = XorClauseList.__new__(XorClauseList)
         cdef int nvars = -1
         cdef int nclauses = -1
-        
+
         lines = io.StringIO(dimacs)
 
         for line in lines:
@@ -1431,7 +1431,7 @@ cdef class XorCNF:
 
         if self._nvars() != c_other._nvars():
             return False
-        
+
         return self._clauses._clauses == c_other._clauses._clauses and self._xor_clauses._clauses == c_other._xor_clauses._clauses
 
     def solve_dimacs(self, command: List[str]=['cryptominisat5'], verbose=False) -> Tuple[bool, np.array|None]:
