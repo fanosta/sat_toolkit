@@ -36,6 +36,28 @@ def test_basic():
     with pytest.raises(IndexError):
         cnf[-4]
 
+def test_nvars():
+    cnf = CNF()
+    assert cnf.nvars == 0
+
+    with pytest.raises(ValueError):
+        cnf.nvars = -1
+
+    cnf.nvars = 0
+    cnf.nvars = 1
+    assert cnf.nvars == 1
+
+    cnf.add_clause([1, 2, -3])
+    assert cnf.nvars == 3
+
+    with pytest.raises(ValueError):
+        cnf.nvars = 2
+
+    cnf.nvars = 3
+    assert cnf.nvars == 3
+    cnf.nvars = 4
+    assert cnf.nvars == 4
+
 
 def test_incompatible_type():
     cnf = CNF([1, 2, 3, 0, -4, 5, 6, 0])

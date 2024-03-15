@@ -241,7 +241,7 @@ cdef class _ClauseList:
     cdef readonly vector[int] _clauses
     cdef readonly vector[size_t] _start_indices
 
-    cdef readonly int nvars
+    cdef int nvars
 
     #used for the buffer support
     cdef ssize_t shape[1]
@@ -259,6 +259,27 @@ cdef class _ClauseList:
         self.shape[0] = 0
         self.view_count = 0
         self.nvars = 0
+
+    @property
+    def nvars(self) -> int:
+        return self.nvars
+
+    @nvars.setter
+    def nvars(self, int val):
+        if val < 0:
+            raise ValueError('nvars must be nonnegative')
+
+        if val >= self.nvars:
+            self.nvars = val
+            return
+
+        cdef size_t i
+        for i in range(self._clauses.size()):
+            if abs(self._clauses[i]) > val:
+                raise ValueError(f'cannot set nvars to {val} as it is too small')
+
+        self.nvars = val
+
 
     cdef int _add_clauses_raw(self, const int *clauses, size_t length) except -1 nogil:
         cdef size_t old_len, i
@@ -1379,6 +1400,26 @@ cdef class XorCNF:
     @property
     def nvars(self) -> int:
         return self._nvars()
+
+    @nvars.setter
+    def nvars(self, int val):
+        if val < 0:
+            raise ValueError('nvars must be nonnegative')
+
+        if val >= self._nvars():
+            self._clauses.nvars = val
+            self._xor_clauses.nvars = val
+            return
+
+        cdef size_t i
+        for i in range(self._xor_clauses._clauses.size()):
+            if abs(self._xor_clauses._clauses[i]) > val:
+                raise ValueError(f'cannot set nvars to {val} as it is too small')
+        for i in range(self._clauses._clauses.size()):
+            if abs(self._clauses._clauses[i]) > val:
+                raise ValueError(f'cannot set nvars to {val} as it is too small')
+
+        self.nvars = val
 
     @property
     def nclauses(self) -> int:

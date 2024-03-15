@@ -38,6 +38,36 @@ def test_xor_clause_list():
     with pytest.raises(IndexError):
         xor_clauses[-4]
 
+def test_nvars():
+    cnf = XorCNF()
+    assert cnf.nvars == 0
+
+    with pytest.raises(ValueError):
+        cnf.nvars = -1
+
+    cnf.nvars = 0
+    cnf.nvars = 1
+    assert cnf.nvars == 1
+
+    cnf.add_clauses([1, 2, -3, 0])
+    assert cnf.nvars == 3
+
+    with pytest.raises(ValueError):
+        cnf.nvars = 2
+
+    cnf.add_xor_clauses([10, 20, -30, 0])
+
+    with pytest.raises(ValueError):
+        cnf.nvars = 10
+    with pytest.raises(ValueError):
+        cnf.nvars = 25
+
+    cnf.nvars = 30
+    assert cnf.nvars == 30
+    cnf.nvars = 40
+    assert cnf.nvars == 40
+
+
 
 def test_xor_cnf():
     xor_cnf = XorCNF()
