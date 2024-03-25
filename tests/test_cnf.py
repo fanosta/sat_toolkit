@@ -58,6 +58,17 @@ def test_nvars():
     cnf.nvars = 4
     assert cnf.nvars == 4
 
+def test_get_vars():
+    cnf1 = CNF([1, 2, 3, 0, -4, 5, 6, 0])
+    assert cnf1.get_vars() == {1, 2, 3, 4, 5, 6}
+
+    cnf2 = CNF.create_xor([1, 2, 3], [4, 5, 6])
+    cnf2 += CNF.create_xor([5, 6], [10, 11])
+    assert cnf2.get_vars() == {1, 2, 3, 4, 5, 6, 10, 11}
+
+    cnf3 = CNF([-1, -2, 0, 2, 4, 0])
+    assert cnf3.get_vars() == {1, 2, 4}
+
 
 def test_incompatible_type():
     cnf = CNF([1, 2, 3, 0, -4, 5, 6, 0])

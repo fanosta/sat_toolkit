@@ -7,6 +7,7 @@ from libc.stdlib cimport malloc, free
 from cpython.buffer cimport PyBUF_FORMAT, PyBUF_ND, PyBUF_STRIDES, PyBUF_WRITABLE
 from cpython.exc cimport PyErr_CheckSignals
 from libcpp.vector cimport vector
+from libcpp.set cimport set
 from libc.stdio cimport printf, snprintf, sscanf
 from libc.stdlib cimport malloc, free, abort
 from libc.string cimport strcpy, memset, strncmp, strlen, memcmp
@@ -280,6 +281,22 @@ cdef class _ClauseList:
 
         self.nvars = val
 
+    cdef set[int] _get_vars(self) nogil:
+        cdef set[int] res
+        cdef size_t i
+        cdef int val
+
+        for i in range(self._clauses.size()):
+            val = self._clauses[i]
+            if val != 0:
+                res.insert(abs(val))
+        return res
+
+    def get_vars(self):
+        """
+        returns the set of all variables used in the clauses of the CNF.
+        """
+        return self._get_vars()
 
     cdef int _add_clauses_raw(self, const int *clauses, size_t length) except -1 nogil:
         cdef size_t old_len, i
@@ -312,7 +329,7 @@ cdef class _ClauseList:
         return self._add_clauses_raw(&clauses[0], clauses.shape[0])
 
 
-    cdef str _to_dimacs(self, const char* clause_prefix) noexcept:
+    cdef str _to_dimacs(self, const char* clause_prefix):
         cdef size_t max_len = snprintf(NULL, 0, "%d", -self.nvars)
         cdef size_t nclauses = self._start_indices.size()
         cdef ssize_t buf_size = (self._clauses.size() - nclauses) * (max_len + 1) + nclauses * (2) + nclauses * len(clause_prefix)
