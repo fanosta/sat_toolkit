@@ -69,6 +69,9 @@ def test_get_vars():
     cnf3 = CNF([-1, -2, 0, 2, 4, 0])
     assert cnf3.get_vars() == {1, 2, 4}
 
+    cnf4 = CNF([-2**31 - 1, 0])
+    assert cnf4.get_vars() == {2**31 - 1}
+
 
 def test_incompatible_type():
     cnf = CNF([1, 2, 3, 0, -4, 5, 6, 0])
