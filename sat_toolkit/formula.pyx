@@ -307,6 +307,9 @@ cdef class _ClauseList:
         self.nvars = 0
 
     def partition(self) -> list[Self]:
+        """
+        partition the CNF/XorClauseList into a list of CNF/XorClauseLists with disjoints variables.
+        """
         cdef dict res = {}
         cdef _BaseClause clause = None
         cdef _ClauseList dst = None, tmp = None
@@ -1466,6 +1469,15 @@ cdef class XorCNF:
         res._xor_clauses._add_clauses(packed_args.reshape(-1))
         return res
 
+    def partition(self) -> tuple[list[CNF], list[XorClauseList]]:
+        """
+        Separately partition the CNF and XorClauseList into a lists of CNFs and
+        XorClauseLists with disjoint variables.
+
+        returns a tuple of two lists, the first containing CNFs and the second
+        containing XorClauseLists.
+        """
+        return (self._clauses.partition(), self._xor_clauses.partition()
 
     def to_cnf(self) -> CNF:
         cdef CNF res = CNF.__new__(CNF)
