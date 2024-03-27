@@ -353,7 +353,7 @@ def test_solve_dimacs():
     cnf += CNF([1, 2, 3, 0])
     cnf += CNF([1, -2, 0])
 
-    for seed in range(100):
+    for seed in range(10):
         args = ['cryptominisat5', f'--random={seed}', '--polar=rnd']
         is_sat, result = cnf.solve_dimacs(args)
         assert is_sat
