@@ -72,6 +72,21 @@ def test_late_merge():
     assert len(partitions) == 1
     assert partitions[0] == cnf
 
+def test_add_after_merge():
+    cnf = CNF()
+
+    cnf += CNF([1, 2, 0])
+    cnf += CNF([3, 4, 0])
+    cnf += CNF([2, 3, 0])
+    cnf += CNF([1, 0])
+    cnf += CNF([4, 0])
+
+    parts = cnf.partition()
+    for part in parts:
+        print(part, end="\n\n")
+
+    assert len(parts) == 1
+
 def test_multiple_merges():
     cnf = CNF()
 
