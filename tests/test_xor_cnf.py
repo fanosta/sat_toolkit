@@ -224,6 +224,17 @@ def test_xor_clause_list_operators():
     assert xor_clauses.nvars == 16
 
 
+def test_xor_cnf_operators():
+    cnf1 = XorCNF([1, 2, 3, 0], [])
+    cnf2 = XorCNF([], [1, 3, 0])
+
+    assert cnf1 + cnf2 == XorCNF([1, 2, 3, 0], [1, 3, 0])
+    cnf1 += cnf2
+    assert cnf1 == XorCNF([1, 2, 3, 0], [1, 3, 0])
+
+    assert cnf1 + CNF([5,6,7,0]) == XorCNF([1, 2, 3, 0, 5, 6, 7, 0], [1, 3, 0])
+    assert cnf1 + XorClauseList([5,6,7,0]) == XorCNF([1, 2, 3, 0], [1, 3, 0, 5, 6, 7, 0])
+
 
 def test_xor_clause_list_iter():
     cnf = XorClauseList([1, 2, 3, 0, 4, 5, 6, 0])

@@ -298,6 +298,73 @@ cdef class _ClauseList:
         """
         return self._get_vars()
 
+    def clear(self):
+        """
+        Remove all clauses from the CNF and set the number of variables to 0.
+        """
+        self._clauses.clear()
+        self._start_indices.clear()
+        self.nvars = 0
+
+    def partition(self) -> list[Self]:
+        cdef dict res = {}
+        cdef _BaseClause clause = None
+        cdef _ClauseList dst = None, tmp = None
+        cdef int var
+
+        for clause in self:
+            if len(clause) == 0:
+                if 0 not in res:
+                    dst = type(self).__new__(type(self))
+                    dst.nvars = self.nvars
+                    res[0] = dst
+                else:
+                    dst = res[0]
+                dst.append(clause)
+
+            dst = None
+            for var in clause:
+                var = abs(var)
+
+                if var not in res:
+                    continue
+
+                if dst is None:
+                    dst = res[var]
+                    continue
+
+                tmp = res[var]
+                if dst is tmp:
+                    continue
+
+                dst += tmp
+                tmp.clear()
+
+            if dst is None:
+                dst = type(self).__new__(type(self))
+                dst.nvars = self.nvars
+
+            for var in clause:
+                var = abs(var)
+                res[var] = dst
+
+            dst.append(clause)
+
+        # iterate over res dictionary values and find all unique
+        # and non-empty partitions
+        cdef list result_list = []
+        cdef set[void *] seen_keys
+        cdef object val
+
+        for val in res.values():
+            if seen_keys.count(<void *> val) > 0:
+                continue
+            seen_keys.insert(<void *> val)
+            if len(val) > 0:
+                result_list.append(val)
+
+        return result_list
+
     cdef int _add_clauses_raw(self, const int *clauses, size_t length) except -1 nogil:
         cdef size_t old_len, i
 
@@ -405,10 +472,17 @@ cdef class _ClauseList:
 
     append = add_clause
 
-    def __iadd__(self, clauses) -> CNF:
+    def __iadd__(self, clauses) -> Self:
         self.add_clauses(clauses)
         return self
 
+    def __add__(self, _ClauseList other) -> Self:
+        cdef _ClauseList res
+        res = type(self).__new__(type(self))
+        res.nvars = max(self.nvars, other.nvars)
+        res._add_clauses(self)
+        res._add_clauses(other)
+        return res
 
     cdef int[::1] _get_clause(self, ssize_t idx):
         cdef size_t begin, end, i
@@ -1468,6 +1542,12 @@ cdef class XorCNF:
             raise ValueError(f'cannot add {type(other).__name__} to {type(self).__name__}')
 
         return self
+
+    def __add__(self, other) -> Self:
+        cdef XorCNF res = type(self).__new__(type(self))
+        res += self
+        res += other
+        return res
 
 
     def to_dimacs(self) -> str:
