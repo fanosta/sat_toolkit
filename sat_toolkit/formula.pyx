@@ -1477,7 +1477,7 @@ cdef class XorCNF:
         returns a tuple of two lists, the first containing CNFs and the second
         containing XorClauseLists.
         """
-        return (self._clauses.partition(), self._xor_clauses.partition()
+        return (self._clauses.partition(), self._xor_clauses.partition())
 
     def to_cnf(self) -> CNF:
         cdef CNF res = CNF.__new__(CNF)
