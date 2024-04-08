@@ -7,7 +7,7 @@ from libc.stdlib cimport malloc, free
 from cpython.buffer cimport PyBUF_FORMAT, PyBUF_ND, PyBUF_STRIDES, PyBUF_WRITABLE
 from cpython.exc cimport PyErr_CheckSignals
 from libcpp.vector cimport vector
-from libcpp.set cimport set
+from libcpp.set cimport set as cpp_set
 from libc.stdio cimport printf, snprintf, sscanf
 from libc.stdlib cimport malloc, free, abort
 from libc.string cimport strcpy, memset, strncmp, strlen, memcmp
@@ -281,8 +281,8 @@ cdef class _ClauseList:
 
         self.nvars = val
 
-    cdef set[int] _get_vars(self) nogil:
-        cdef set[int] res
+    cdef cpp_set[int] _get_vars(self) nogil:
+        cdef cpp_set[int] res
         cdef size_t i
         cdef int val
 
@@ -310,7 +310,8 @@ cdef class _ClauseList:
         """
         partition the CNF/XorClauseList into a list of CNF/XorClauseLists with disjoints variables.
         """
-        cdef dict res = {}
+        cdef dict[int, _ClauseList] res = {}
+        cdef set[int] vars_to_update = set()
         cdef _BaseClause clause = None
         cdef _ClauseList dst = None, tmp = None
         cdef int var
@@ -326,8 +327,11 @@ cdef class _ClauseList:
                 dst.append(clause)
 
             dst = None
+            vars_to_update.clear()
+
             for var in clause:
                 var = abs(var)
+                vars_to_update.add(var)
 
                 if var not in res:
                     continue
@@ -340,15 +344,18 @@ cdef class _ClauseList:
                 if dst is tmp:
                     continue
 
+                vars_to_update = vars_to_update.union(tmp.get_vars())
                 dst += tmp
                 tmp.clear()
+
+            assert dst is None or len(dst) > 0
 
             if dst is None:
                 dst = type(self).__new__(type(self))
                 dst.nvars = self.nvars
 
-            for var in clause:
-                var = abs(var)
+            for var in vars_to_update:
+                assert var > 0
                 res[var] = dst
 
             dst.append(clause)
@@ -356,7 +363,7 @@ cdef class _ClauseList:
         # iterate over res dictionary values and find all unique
         # and non-empty partitions
         cdef list result_list = []
-        cdef set[void *] seen_keys
+        cdef cpp_set[void *] seen_keys
         cdef object val
 
         for val in res.values():
