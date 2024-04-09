@@ -131,6 +131,22 @@ def test_equal_2():
 
     assert a == b
 
+def test_translate():
+    xors = XorClauseList([-1, 2, 3, 0, -4, -5, 6, 0])
+
+    mapping = np.zeros(7, dtype=np.int32)
+    mapping[1:4] = [4, -5, -6]
+    mapping[4:7] = [1, -2, 3]
+
+    xors2 = xors.translate(mapping)
+    assert isinstance(xors2, XorClauseList)
+
+    assert xors2.nvars == 6
+    assert len(xors2) == 2
+    assert xors2[0] == XorClause([-4, -5, -6])
+    assert xors2[1] == XorClause([-1, 2, 3])
+    assert xors2 == XorClauseList([-4, -5, -6, 0, -1, 2, 3, 0])
+
 
 def test_dimacs():
     xor_cnf = XorCNF()

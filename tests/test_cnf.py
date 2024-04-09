@@ -181,6 +181,7 @@ def test_translate():
     mapping[4:7] = [1, -2, 3]
 
     cnf2 = cnf.translate(mapping)
+    assert isinstance(cnf2, CNF)
 
     assert cnf2.nvars == 6
     assert len(cnf2) == 2

@@ -375,6 +375,41 @@ cdef class _ClauseList:
 
         return result_list
 
+    def translate(self, mapping) -> Self:
+        """
+        Translate all variables in the CNF/XorClauseList to a new index.
+        The translation mapping is given by the mapping paramter.
+
+        Index 0 must always map to index 0 again.
+
+        :return: a new CNF with variables changed according to mapping parameter
+        """
+        cdef np_vars = np.array(mapping, copy=False, dtype=np.int32)
+        cdef int [::1] var_view = np_vars
+        cdef size_t i
+
+        if var_view.shape[0] != self.nvars + 1:
+            raise ValueError(f'need to provide translation for all 1+{self.nvars} variables')
+        if var_view[0] != 0:
+            raise ValueError('variable 0 must map to 0 again')
+
+        for i in range(1, <size_t> var_view.shape[0]):
+            if var_view[i] == 0:
+                raise ValueError('variable must not be mapped to 0')
+
+        cdef vector[int] new_clauses
+        new_clauses.resize(self._clauses.size())
+
+        cdef int var
+        for i in range(self._clauses.size()):
+            var = self._clauses[i]
+            new_clauses[i] = var_view[abs(var)] * (1 if var > 0 else -1)
+
+        cdef _ClauseList res = type(self).__new__(type(self))
+        res.nvars = self.nvars
+        res._add_clauses_raw(new_clauses.data(), new_clauses.size())
+        return res
+
     cdef int _add_clauses_raw(self, const int *clauses, size_t length) except -1 nogil:
         cdef size_t old_len, i
 
@@ -1316,40 +1351,6 @@ cdef class CNF(_ClauseList):
                 raise sp.CalledProcessError(ret_code, ' '.join(espresso.args))
 
             return ret_code == 0
-
-    def translate(self, mapping) -> CNF:
-        """
-        Translate all variables in the CNF to a new index.
-        The translation mapping is given by the mapping paramter.
-
-        Index 0 must always map to index 0 again.
-
-        :return: a new CNF with variables changed according to mapping parameter
-        """
-        cdef np_vars = np.array(mapping, copy=False, dtype=np.int32)
-        cdef int [::1] var_view = np_vars
-        cdef size_t i
-
-        if var_view.shape[0] != self.nvars + 1:
-            raise ValueError(f'need to provide translation for all 1+{self.nvars} variables')
-        if var_view[0] != 0:
-            raise ValueError('variable 0 must map to 0 again')
-
-        for i in range(1, <size_t> var_view.shape[0]):
-            if var_view[i] == 0:
-                raise ValueError('variable must not be mapped to 0')
-
-        cdef vector[int] new_clauses
-        new_clauses.resize(self._clauses.size())
-
-        cdef int var
-        for i in range(self._clauses.size()):
-            var = self._clauses[i]
-            new_clauses[i] = var_view[abs(var)] * (1 if var > 0 else -1)
-
-        cdef CNF res = CNF.__new__(CNF)
-        res._add_clauses(<int[:new_clauses.size()]> new_clauses.data())
-        return res
 
 collections.abc.Sequence.register(_ClauseList)
 
