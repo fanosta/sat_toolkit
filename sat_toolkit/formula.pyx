@@ -40,6 +40,12 @@ import subprocess as sp
 from tempfile import NamedTemporaryFile
 import collections
 
+numpy_version = tuple(map(int, np.version.version.split('.')))
+if numpy_version >= (2,):
+    NP_COPY_ON_DEMAND=None
+else:
+    NP_COPY_ON_DEMAND=True
+
 # from typing import TYPE_CHECKING
 # if TYPE_CHECKING:
 #     from typing import *
@@ -384,7 +390,7 @@ cdef class _ClauseList:
 
         :return: a new CNF with variables changed according to mapping parameter
         """
-        cdef np_vars = np.array(mapping, copy=False, dtype=np.int32)
+        cdef np_vars = np.array(mapping, copy=NP_COPY_ON_DEMAND, dtype=np.int32)
         cdef int [::1] var_view = np_vars
         cdef size_t i
 
@@ -493,7 +499,7 @@ cdef class _ClauseList:
         try:
             clauses_view = clauses
         except (TypeError, ValueError):
-            np_clauses = np.array(clauses, copy=False, dtype=np.int32)
+            np_clauses = np.array(clauses, copy=NP_COPY_ON_DEMAND, dtype=np.int32)
             clauses_view = np_clauses
 
         self._add_clauses(clauses_view)
@@ -789,7 +795,7 @@ cdef class CNF(_ClauseList):
         creates a CNF that asserts that all variables for the provided indices
         are zero.
         """
-        indices = np.array(indices, dtype=np.int32, copy=False)
+        indices = np.array(indices, dtype=np.int32, copy=NP_COPY_ON_DEMAND)
         return CNF._create_all_zero(indices)
 
     @staticmethod
@@ -816,8 +822,8 @@ cdef class CNF(_ClauseList):
     @staticmethod
     def create_all_equal(lhs, rhs) -> CNF:
         "creates a CNF that asserts lhs[i] == rhs[i] for all i."
-        lhs = np.array(lhs, dtype=np.int32, copy=False)
-        rhs = np.array(rhs, dtype=np.int32, copy=False)
+        lhs = np.array(lhs, dtype=np.int32, copy=NP_COPY_ON_DEMAND)
+        rhs = np.array(rhs, dtype=np.int32, copy=NP_COPY_ON_DEMAND)
         return CNF._create_all_equal(lhs, rhs)
 
     @staticmethod
