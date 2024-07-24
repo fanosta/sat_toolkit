@@ -676,6 +676,13 @@ cdef class _ClauseList:
     def __reduce__(self):
         return type(self), (np.array(self), self.nvars)
 
+    # copy support
+    def __copy__(self):
+        return type(self)(self, self.nvars)
+
+    def copy(self):
+        return self.__copy__()
+
     # buffer support
     def __getbuffer__(self, cython.Py_buffer *buffer, int flags):
         if flags & PyBUF_WRITABLE:
@@ -1582,8 +1589,16 @@ cdef class XorCNF:
         '''
         return f'p cnf {self._nvars()} {len(self._clauses) + len(self._xor_clauses)}\n{self._clauses._to_dimacs("")}{self._xor_clauses._to_dimacs("x")}'
 
+    # pickle support
     def __reduce__(self):
         return type(self), (self._clauses, self._xor_clauses)
+
+    # copy support
+    def __copy__(self):
+        return type(self)(self._clauses, self._xor_clauses)
+
+    def copy(self):
+        return self.__copy__()
 
     def __eq__(self, other):
         cdef XorCNF c_other

@@ -207,6 +207,20 @@ def test_pickle():
     assert cnf2.nvars == cnf2_loaded.nvars == 10
 
 
+def test_copy():
+    cnf1 = CNF([1, 2, 3, 0, 4, 5, 6, 0])
+    cnf2 = CNF([1, 2, 3, 0, 4, 5, 6, 0], nvars=10)
+
+    cnf1_copy = cnf1.copy()
+    cnf2_copy = cnf2.copy()
+
+    assert cnf1 is not cnf1_copy
+    assert cnf2 is not cnf2_copy
+    assert cnf1 == cnf1_copy
+    assert cnf2 == cnf2_copy
+    assert cnf2.nvars == cnf2_copy.nvars == 10
+
+
 def test_contains():
     cnf = CNF([1, 2, 3, 0, 4, 5, 6, 0])
     assert Clause([1, 2, 3]) in cnf

@@ -211,6 +211,23 @@ def test_pickle():
     assert xor_cnf.nvars == 0
 
 
+def test_copy():
+    xors1 = XorClauseList([1, 2, 3, 0, 4, 5, 6, 0])
+    xors2 = XorClauseList([1, 2, 3, 0, 4, 5, 6, 0], nvars=10)
+
+    xors1_copy = xors1.copy()
+    xors2_copy = xors2.copy()
+
+    assert xors1 is not xors1_copy
+    assert xors2 is not xors2_copy
+    assert xors1 == xors1_copy
+    assert xors2 == xors2_copy
+    assert xors2.nvars == xors2_copy.nvars == 10
+
+    xor_cnf = XorCNF()
+    assert xor_cnf.nvars == 0
+
+
 def test_xor_clause_list_operators():
     xor_clauses = XorClauseList()
     xor_clauses += XorClauseList([-1, 2, -3, 0, 4, -5, 6, 0])
