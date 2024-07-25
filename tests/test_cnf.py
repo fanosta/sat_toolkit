@@ -258,6 +258,14 @@ def test_logical_or():
     assert cnf3[0] == Clause([1, 2, 3, -10])
     assert cnf3[1] == Clause([4, 5, 6, -10])
 
+    empty_cnf = CNF(nvars=4)
+    empty_cnf2 = empty_cnf.logical_or(5)
+    assert empty_cnf2.nvars == 5
+
+    empty_cnf3 = empty_cnf.implied_by(2)
+    assert empty_cnf3.nvars == 4
+
+
 def test_clause():
     clause = Clause([1, 2, 3])
     assert len(clause) == 3
@@ -286,6 +294,22 @@ def test_to_cnf():
     cnf_ref = CNF.create_xor([1, 2], [4, 3])
 
     assert cnf.equiv(cnf_ref)
+
+def test_create_all_equal():
+    cnf = CNF.create_all_equal([1], [2])
+    assert Clause([1, -2]) in cnf
+    assert Clause([-1, 2]) in cnf
+    assert len(cnf) == 2
+
+    cnf2 = CNF.create_all_equal([1, 2], [3, 4])
+    assert Clause([1, -3]) in cnf2
+    assert Clause([-1, 3]) in cnf2
+    assert Clause([2, -4]) in cnf2
+    assert Clause([-2, 4]) in cnf2
+    assert len(cnf2) == 4
+
+    empty = CNF.create_all_equal([], [])
+    assert len(empty) == 0
 
 
 def test_create_xor():

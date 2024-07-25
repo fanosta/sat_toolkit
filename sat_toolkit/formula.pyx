@@ -861,8 +861,7 @@ cdef class CNF(_ClauseList):
             clauses[6 * i + 5] = 0
 
         cdef CNF res = CNF.__new__(CNF)
-        if clauses.size() > 0:
-            res._add_clauses(<int[:clauses.size()]> clauses.data())
+        res._add_clauses_raw(clauses.data(), clauses.size())
         return res
 
     cdef int _add_xor_clause(self, const int[::1] xor_clause, int rhs=0) except -1 nogil:
@@ -991,7 +990,9 @@ cdef class CNF(_ClauseList):
             dst += 1
 
         cdef CNF res = CNF.__new__(CNF)
-        res._add_clauses(<int[:new_clauses.size()]> new_clauses.data())
+        res.nvars = max(self.nvars, abs(var))
+        res._add_clauses_raw(new_clauses.data(), new_clauses.size())
+
         return res
 
     def implied_by(self, int var) -> CNF:
