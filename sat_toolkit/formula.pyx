@@ -393,6 +393,7 @@ cdef class _ClauseList:
         cdef np_vars = np.array(mapping, copy=NP_COPY_ON_DEMAND, dtype=np.int32)
         cdef int [::1] var_view = np_vars
         cdef size_t i
+        cdef int max_new_var = 0
 
         if var_view.shape[0] != self.nvars + 1:
             raise ValueError(f'need to provide translation for all 1+{self.nvars} variables')
@@ -402,6 +403,7 @@ cdef class _ClauseList:
         for i in range(1, <size_t> var_view.shape[0]):
             if var_view[i] == 0:
                 raise ValueError('variable must not be mapped to 0')
+            max_new_var = max(max_new_var, abs(var_view[i]))
 
         cdef vector[int] new_clauses
         new_clauses.resize(self._clauses.size())
@@ -412,7 +414,7 @@ cdef class _ClauseList:
             new_clauses[i] = var_view[abs(var)] * (1 if var > 0 else -1)
 
         cdef _ClauseList res = type(self).__new__(type(self))
-        res.nvars = self.nvars
+        res.nvars = max_new_var
         res._add_clauses_raw(new_clauses.data(), new_clauses.size())
         return res
 

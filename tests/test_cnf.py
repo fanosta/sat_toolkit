@@ -189,6 +189,10 @@ def test_translate():
     assert cnf2[1] == Clause([-1, 2, 3])
     assert cnf2 == CNF([-4, -5, -6, 0, -1, 2, 3, 0])
 
+    empty_cnf = CNF(nvars=4)
+    mapped_empty = empty_cnf.translate([0, 5, 6, 7, 8])
+    assert empty_cnf.nvars == 4
+    assert mapped_empty.nvars == 8
 
 def test_pickle():
     import pickle
