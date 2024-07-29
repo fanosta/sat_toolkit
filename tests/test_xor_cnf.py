@@ -103,6 +103,21 @@ def test_xor_cnf():
                       "x1 3 6 0\n"
                       "x-2 4 5 0\n")
 
+
+def test_add_clauses():
+    xor_cnf = XorCNF()
+
+    xor_cnf.add_clauses(CNF([1, -2, 3, 0, -4, 5, -6, 0]))
+    xor_cnf.add_xor_clauses(XorClauseList([1, 3, 6, 0, -2, 4, 5, 0]))
+
+    with pytest.raises(TypeError):
+        xor_cnf.add_clauses(XorClauseList([1, 3, 6, 0, -2, 4, 5, 0]))
+
+    with pytest.raises(TypeError):
+        xor_cnf.add_xor_clauses(CNF([1, -2, 3, 0, -4, 5, -6, 0]))
+
+
+
 def test_equal():
     a = XorCNF()
 
@@ -440,6 +455,7 @@ def test_solve_dimacs():
         args = ['cryptominisat5', f'--random={seed}', '--polar=rnd']
         is_sat, result = cnf.solve_dimacs(args)
         assert is_sat
+        assert result is not None
 
         assert result[1] ^ result[2] ^ result[3] == 0
         assert result[1] ^ result[3] == 1
