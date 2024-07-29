@@ -156,29 +156,35 @@ cdef class _BaseClause:
 
         return False
 
-    def __iter__(self) -> Iterable[int]:
+    def __iter__(self) -> Iterator[int]:
         cdef size_t i = 0
         for i in range(self._clause.size()):
             yield self._clause[i]
 
-    def __reversed__(self) -> Iterable[int]:
+    def __reversed__(self) -> Iterator[int]:
         cdef size_t i = 0
         for i in reversed(range(self._clause.size())):
             yield self._clause[i]
 
-    def count(self, int needle) -> int:
+    def count(self, needle) -> int:
         "Return the number of times needle appears in the list."
         cdef size_t i
         cdef int c
         cdef size_t count = 0
+        cdef int c_needle
+
+        try:
+            c_needle = needle
+        except TypeError:
+            return 0
 
         for i in range(self._clause.size()):
-            if self._clause[i] == needle:
+            if self._clause[i] == c_needle:
                 count += 1
 
         return count
 
-    def index(self, int needle, start=None, end=None) -> int:
+    def index(self, needle, start=None, end=None) -> int:
         """
         Return zero-based index in the list of the first item whose value is
         equal to needle. Raises a ValueError if there is no such item.
@@ -189,6 +195,12 @@ cdef class _BaseClause:
         of the full sequence rather than the start argument.
         """
         cdef size_t i, start_idx = 0, end_idx = self._clause.size()
+        cdef int c_needle
+
+        try:
+            c_needle = needle
+        except TypeError:
+            raise ValueError(f'{needle} is of wrong tpe to be contained in {type(self).__name__}')
 
         if start is not None:
             start_idx = self._get_slice_index(start)
@@ -298,13 +310,13 @@ cdef class _ClauseList:
                 res.insert(abs(val))
         return res
 
-    def get_vars(self):
+    def get_vars(self) -> set[int]:
         """
         returns the set of all variables used in the clauses of the CNF.
         """
         return self._get_vars()
 
-    def clear(self):
+    def clear(self) -> None:
         """
         Remove all clauses from the CNF and set the number of variables to 0.
         """
@@ -559,14 +571,14 @@ cdef class _ClauseList:
     def __len__(self) -> int:
         return self._start_indices.size()
 
-    def __iter__(self) -> Iterable[Clause]:
+    def __iter__(self) -> Iterator[_BaseClause]:
         cdef size_t i = 0
         while i < self._start_indices.size():
             yield self.get_clause(i)
             i += 1
 
 
-    def __reversed__(self) -> Iterable[Clause]:
+    def __reversed__(self) -> Iterator[_BaseClause]:
         cdef size_t i
         for i in reversed(range(self._start_indices.size())):
             yield self.get_clause(i)
@@ -1124,7 +1136,7 @@ cdef class CNF(_ClauseList):
         free_buf(&buf)
         return py_bytes.decode()
 
-    def minimize_espresso(self, espresso_args: List[str] = []) -> CNF:
+    def minimize_espresso(self, espresso_args: list[str] = []) -> CNF:
         """
         Uses espresso to minimize the given CNF.
 
@@ -1147,7 +1159,7 @@ cdef class CNF(_ClauseList):
 
             return cnf
 
-    def _minimize_dimacs(self, args: List[str], outfile: str) -> CNF:
+    def _minimize_dimacs(self, args: list[str], outfile: str) -> CNF:
         """
         calls args with self.to_dimacs() as stdin, waits for the command to
         finish with exit code 10 or 20 and parses `outfile` as DIAMCS`.
@@ -1170,7 +1182,7 @@ cdef class CNF(_ClauseList):
         with open(outfile, 'r') as f:
             return CNF.from_dimacs(f.read())
 
-    def minimize_lingeling(self, optlevel=None, timeout=0, extra_args: List[str] = []) -> CNF:
+    def minimize_lingeling(self, optlevel=None, timeout=0, extra_args: list[str] = []) -> CNF:
         """
         Uses Lingeling to minimize the given CNF.
 
@@ -1196,7 +1208,7 @@ cdef class CNF(_ClauseList):
 
 
 
-    def solve_dimacs(self, command: List[str], verbose=False) -> Tuple[bool, np.array|None]:
+    def solve_dimacs(self, command: list[str], verbose=False) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None]:
         """
         solves the SAT by calling a DIMACS the compliant sat solver given by command.
 
@@ -1531,10 +1543,10 @@ cdef class XorCNF:
 
         return res
 
-    def add_clauses(self, clauses):
+    def add_clauses(self, clauses: CNF|npt.ArrayLike) -> None:
         self._clauses.add_clauses(clauses)
 
-    def add_xor_clauses(self, xor_clauses):
+    def add_xor_clauses(self, xor_clauses: XorClauseList|npt.ArrayLike) -> None:
         self._xor_clauses.add_clauses(xor_clauses)
 
     cdef int _nvars(self) noexcept:
@@ -1566,10 +1578,12 @@ cdef class XorCNF:
 
     @property
     def nclauses(self) -> int:
+        """returns the number of CNF clauses (excluding xor clauses)"""
         return len(self._clauses)
 
     @property
     def nxor_clauses(self) -> int:
+        """returns the number of xor clauses (excluding CNF clauses)"""
         return len(self._xor_clauses)
 
     def __repr__(self) -> str:
@@ -1578,7 +1592,7 @@ cdef class XorCNF:
     def __str__(self) -> str:
         return self.to_dimacs().rstrip()
 
-    def __iadd__(self, other):
+    def __iadd__(self, other: CNF|XorClauseList|XorCNF) -> Self:
         if isinstance(other, CNF):
             self._clauses._add_clauses(other)
             self._clauses.nvars = max(self._nvars(), (<CNF> other).nvars)
@@ -1595,7 +1609,7 @@ cdef class XorCNF:
 
         return self
 
-    def __add__(self, other) -> Self:
+    def __add__(self, other: CNF|XorClauseList|XorCNF) -> Self:
         cdef XorCNF res = type(self).__new__(type(self))
         res += self
         res += other
@@ -1621,7 +1635,7 @@ cdef class XorCNF:
         return type(self), (self._clauses, self._xor_clauses)
 
     # copy support
-    def __copy__(self):
+    def __copy__(self) -> Self:
         return type(self)(self._clauses, self._xor_clauses)
 
     def copy(self):
@@ -1640,7 +1654,7 @@ cdef class XorCNF:
 
         return self._clauses._clauses == c_other._clauses._clauses and self._xor_clauses._clauses == c_other._xor_clauses._clauses
 
-    def solve_dimacs(self, command: List[str]=['cryptominisat5'], verbose=False) -> Tuple[bool, np.array|None]:
+    def solve_dimacs(self, command: list[str]=['cryptominisat5'], verbose=False) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None]:
         """
         solves the SAT by calling a DIMACS compliant sat solver that also
         supports XORs given by command. The solver defaults to cryptominisat5.
@@ -1838,6 +1852,9 @@ cdef class Truthtable:
         return result.getvalue()
 
     def __eq__(self, other) -> bool:
+        if not isinstance(other, Truthtable):
+            return False
+
         if self.numbits != other.numbits:
             return False
         if not np.all(self.on_set == other.on_set):
@@ -1850,7 +1867,7 @@ cdef class Truthtable:
             return False
         return True
 
-    def to_cnf(self, espresso_args: List[str] = []) -> CNF:
+    def to_cnf(self, espresso_args: list[str] = []) -> CNF:
         """
         Uses espresso to convert the Truthtable to a minimized CNF.
 
