@@ -67,6 +67,14 @@ def test_nvars():
     cnf.nvars = 40
     assert cnf.nvars == 40
 
+    cnf2 = XorCNF(nvars=4)
+    assert cnf2.nvars == 4
+
+    with pytest.raises(ValueError):
+        XorCNF(nvars=-1)
+
+    assert XorCNF(nvars=0) == XorCNF(nvars=0)
+    assert XorCNF(nvars=0) != XorCNF(nvars=1)
 
 
 def test_xor_cnf():
@@ -146,6 +154,48 @@ def test_translate():
     assert xors2[0] == XorClause([-4, -5, -6])
     assert xors2[1] == XorClause([-1, 2, 3])
     assert xors2 == XorClauseList([-4, -5, -6, 0, -1, 2, 3, 0])
+
+
+def test_translate_xor_cnf():
+    a = XorCNF()
+    a += CNF([1, 2, 3, 0], nvars=6)
+    a += XorClauseList([-1, 2, 3, 0, -4, -5, 6, 0])
+
+    mapping_b = np.array([0, 6, 5, 4, -3, -2, -1], dtype=np.int32)
+    b = a.translate(mapping_b)
+    assert isinstance(b, XorCNF)
+    assert Clause([6, 5, 4]) in b
+    assert XorClause([-6, 5, 4]) in b
+    assert XorClause([3, 2, -1]) in b
+
+    mapping_c = np.array([0, 10, 20, 30, -40, -50, -60], dtype=np.int32)
+    c = a.translate(mapping_c)
+    assert isinstance(c, XorCNF)
+    assert c.nvars == 60
+
+    assert Clause([10, 20, 30]) in c
+    assert XorClause([-10, 20, 30]) in c
+    assert XorClause([40, 50, -60]) in c
+
+
+def test_contains():
+    a = XorCNF()
+    a += CNF([1, 2, 3, 0])
+    a += XorClauseList([1, 3, 6, 0])
+
+    assert Clause([1, 2, 3]) in a
+    assert XorClause([1, 3, 6]) in a
+
+    assert XorClause([1, 2, 3]) not in a
+    assert Clause([1, 3, 6]) not in a
+
+    # wrong type
+    assert [1, 2, 3] not in a
+    assert (1, 2, 3) not in a
+    assert np.array([1, 2, 3], dtype=np.int32) not in a
+    assert [1, 3, 6] not in a
+    assert (1, 3, 6) not in a
+    assert np.array([1, 3, 6], dtype=np.int32) not in a
 
 
 def test_dimacs():

@@ -1393,11 +1393,14 @@ cdef class XorCNF:
         self._clauses = CNF.__new__(CNF)
         self._xor_clauses = XorClauseList.__new__(XorClauseList)
 
-    def __init__(self, clauses: CNF|None=None, xor_clauses: XorClauseList|None=None):
+    def __init__(self, clauses: CNF|None=None, xor_clauses: XorClauseList|None=None, nvars: int|None=None):
         if clauses is not None:
             self._clauses.add_clauses(clauses)
         if xor_clauses is not None:
             self._xor_clauses.add_clauses(xor_clauses)
+
+        if nvars is not None:
+            self.nvars = nvars
 
 
     @staticmethod
@@ -1503,6 +1506,19 @@ cdef class XorCNF:
         """
         return (self._clauses.partition(), self._xor_clauses.partition())
 
+    def translate(self, mapping) -> XorCNF:
+        """
+        Translate all variables in the XorCNF to a new index.
+        The translation mapping is given by the mapping paramter.
+
+        Index 0 must always map to index 0 again.
+
+        :return: a new XorCNF with variables changed according to mapping parameter
+        """
+        cdef CNF new_clauses = self._clauses.translate(mapping)
+        cdef XorClauseList new_xors = self._xor_clauses.translate(mapping)
+        return XorCNF(new_clauses, new_xors)
+
     def to_cnf(self) -> CNF:
         cdef CNF res = CNF.__new__(CNF)
         cdef size_t idx
@@ -1584,6 +1600,14 @@ cdef class XorCNF:
         res += self
         res += other
         return res
+
+    def __contains__(self, needle) -> bool:
+        if isinstance(needle, Clause):
+            return needle in self._clauses
+        elif isinstance(needle, XorClause):
+            return needle in self._xor_clauses
+        else:
+            return False
 
 
     def to_dimacs(self) -> str:
