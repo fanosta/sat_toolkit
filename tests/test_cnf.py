@@ -1,4 +1,4 @@
-import collections
+import collections.abc
 import numpy as np
 import pytest
 
@@ -242,6 +242,25 @@ def test_contains():
     cnf.add_clause([1, 2, 3])
     assert cnf.count(Clause([1, 2, 3])) == 2
     assert cnf.count(Clause([1, 2])) == 0
+
+    assert 'asdf' not in cnf
+    assert None not in cnf
+    assert (1, 2, 3) not in cnf
+    assert 1 not in cnf
+
+def test_clause_contains():
+    c = Clause([1, 2, 3])
+    assert 1 in c
+    assert 2 in c
+    assert 3 in c
+
+    assert 1.0 in c
+    assert np.int32(1) in c
+    assert np.int64(1) in c
+
+    c2 = Clause([-1, -2, -3])
+    assert -1 in c2
+    assert np.uint32((1<<32) - 1) not in c2
 
 
 def test_logical_or():

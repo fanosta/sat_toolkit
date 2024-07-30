@@ -116,9 +116,14 @@ cdef class _BaseClause:
     def __len__(self) -> int:
         return self._clause.size()
 
-    def __contains__(self, int needle) -> bint:
+    def __contains__(self, needle) -> bint:
         cdef size_t i
-        cdef int c
+        cdef int c_needle
+
+        try:
+            c_needle = needle
+        except (TypeError, OverflowError):
+            return False
 
         for i in range(self._clause.size()):
             if self._clause[i] == needle:
@@ -145,7 +150,7 @@ cdef class _BaseClause:
 
         try:
             c_needle = needle
-        except TypeError:
+        except (TypeError, OverflowError):
             return 0
 
         for i in range(self._clause.size()):
@@ -171,6 +176,8 @@ cdef class _BaseClause:
             c_needle = needle
         except TypeError:
             raise ValueError(f'{needle} is of wrong tpe to be contained in {type(self).__name__}')
+        except OverflowError:
+            raise ValueError(f'{needle} is too large to be contained in {type(self).__name__}')
 
         if start is not None:
             start_idx = self._get_slice_index(start)
@@ -568,7 +575,7 @@ cdef class _ClauseList:
             return False
         return True
 
-    cdef int _check_clause_type(self, _BaseClause clause) noexcept:
+    cdef int _check_clause_type(self, clause) noexcept:
         abort()
 
     cdef int _compare_clause(self, size_t idx, _BaseClause other) except -1 nogil:
@@ -1320,7 +1327,7 @@ cdef class CNF(_ClauseList):
 
         return result
 
-    cdef int _check_clause_type(self, _BaseClause clause) noexcept:
+    cdef int _check_clause_type(self, clause) noexcept:
         return isinstance(clause, Clause)
 
     def __repr__(self) -> str:
@@ -1357,7 +1364,7 @@ cdef class XorClauseList(_ClauseList):
     """
     Class for storing and manipulating a list of xor clauses.
     """
-    cdef int _check_clause_type(self, _BaseClause clause) noexcept:
+    cdef int _check_clause_type(self, clause) noexcept:
         return isinstance(clause, XorClause)
 
     cdef XorClause get_clause(self, ssize_t idx):
