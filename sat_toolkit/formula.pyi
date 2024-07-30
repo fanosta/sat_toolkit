@@ -12,18 +12,6 @@ class _BaseClause(abc.Sequence):
     def __init__(self, clause: Iterable[int]):
         ...
 
-    def to_linear_constraint(self, variables: list):
-        """
-        return the current clause as a linear constraint suitable for MILP modeling.
-        the resulting constraint is suitable if all variables are constrained to [0, 1].
-
-        :param variables:   List of MILP (or similar) variables with overloaded
-                            __add__, __neg__, and __geq__. The list is shifted compared to the
-                            indexing, i.e. variables[0] correspsonds to index 1 in the Clause.
-        :return:    a linear constraint over variables
-        """
-        ...
-
     @property
     def maxvar(self) -> int:
         ...

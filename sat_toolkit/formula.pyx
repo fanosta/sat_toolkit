@@ -77,36 +77,6 @@ cdef class _BaseClause:
             self._clause.push_back(c)
         self._clause.shrink_to_fit()
 
-    def to_linear_constraint(self, variables: list):
-        """
-        return the current clause as a linear constraint suitable for MILP modeling.
-        the resulting constraint is suitable if all variables are constrained to [0, 1].
-
-        :param variables:   List of MILP (or similar) variables with overloaded
-                            __add__, __neg__, and __geq__. The list is shifted compared to the
-                            indexing, i.e. variables[0] correspsonds to index 1 in the Clause.
-        :return:    a linear constraint over variables
-        """
-        cdef size_t i
-        cdef int c
-
-        cdef object lhs = 0
-        cdef int rhs = 1
-
-        if <size_t> len(variables) < self._maxvar():
-            raise IndexError(f'too few variables supplied')
-
-        for i in range(self._clause.size()):
-            c = self._clause[i]
-            var = variables[abs(c) - 1]
-            if c > 0:
-                lhs += var
-            if c < 0:
-                lhs += -var
-                rhs -= 1
-
-        return lhs >= rhs
-
     cdef size_t _maxvar(self):
         cdef size_t i
         cdef int c, res = 0
