@@ -1,2 +1,38 @@
 [build-system]
 requires = ["setuptools", "wheel", "Cython"]
+
+[project]
+name = "sat-toolkit"
+version = "0.5.0"
+dependencies = [
+   "numpy>=1.21"
+]
+requires-python = ">=3.9"
+authors = [
+  {name = "Marcel Nageler", email = "marcel.nageler@iaik.tugraz.at"},
+]
+
+description = "Tool for manipulating CNF formulas"
+readme = "README.md"
+license = {file = "LICENSE"}
+classifiers = [
+   "License :: OSI Approved :: MIT License",
+   "Operating System :: POSIX :: Linux",
+   "Operating System :: MacOS",
+   "Programming Language :: Python",
+   "Programming Language :: Cython",
+   "Programming Language :: C",
+   "Framework :: Pytest",
+]
+
+
+[project.urls]
+Repository = "https://github.com/fanosta/sat_toolkit"
+"Bug Tracker" = "https://github.com/fanosta/sat_toolkit/issues"
+
+
+[tool.setuptools.package-data]
+autodiver = ["**/log_config.json"]
+[project.scripts]
+verify-characteristic = "autodiver.verify_characteristic:cli"
+tikzify = "autodiver.tikzify:main"
