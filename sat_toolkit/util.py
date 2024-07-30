@@ -6,9 +6,6 @@ import numpy as np
 
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from typing import *
-
 
 class IndexSet:
     numvars: int
@@ -17,11 +14,11 @@ class IndexSet:
         self.numvars = 0
         self._fieldnames = set()
 
-    def add_index_array(self, name: str, shape: Tuple[int, ...]):
-        length = np.prod(shape, dtype=np.int32)
+    def add_index_array(self, name: str, shape: tuple[int, ...]):
+        length: int = int(np.prod(shape, dtype=np.int32))
         res = np.arange(self.numvars + 1, self.numvars + 1 + length, dtype=np.int32)
         res = res.reshape(shape)
-        res.flags.writeable = 0
+        res.flags.writeable = False
         self.numvars += length
 
         self._fieldnames.add(name)

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Literal, Iterable, Iterator, overload, Self
+from typing import Literal, Iterable, Iterator, Self
 import io
 from collections import abc
 
@@ -34,7 +34,7 @@ class _BaseClause(abc.Sequence):
     def __len__(self) -> int:
         ...
 
-    def __contains__(self, needle: int) -> bool:
+    def __contains__(self, needle) -> bool:
         ...
 
     def __iter__(self) -> Iterator[int]:
@@ -59,11 +59,7 @@ class _BaseClause(abc.Sequence):
         """
         ...
 
-    @overload
-    def __eq__ (self, other: Self) -> bool:
-        ...
-    @overload
-    def __eq__ (self, other) -> Literal[False]:
+    def __eq__ (self, other) -> bool:
         ...
 
 class Clause(_BaseClause):
@@ -156,40 +152,16 @@ class _ClauseList[T: _BaseClause](abc.Sequence):
         ...
 
 
-    @overload
-    def __eq__ (self, other: Self) -> bool:
+    def __eq__ (self, other) -> bool:
         ...
 
-    @overload
-    def __eq__ (self, other) -> Literal[False]:
+    def __contains__(self, needle) -> bool:
         ...
 
-    @overload
-    def __contains__(self, needle: T) -> bool:
+    def count(self, needle) -> int:
         ...
 
-    @overload
-    def __contains__(self, needle) -> Literal[False]:
-        ...
-
-    @overload
-    def count(self, needle: T) -> int:
-        ...
-
-    @overload
-    def count(self, needle) -> Literal[0]:
-        ...
-
-
-    @overload
-    def index(self, needle: T, start: int|None=None, end: int|None=None) -> int:
-        ...
-
-    @overload
-    def index(self, needle, start: int|None=None, end: int|None=None) -> Literal[0]:
-        ...
-
-    def index(self, needle, start=None, end=None):
+    def index(self, needle, start: int|None=None, end: int|None=None):
         """
         Return zero-based index in the list of the first item whose value is
         equal to needle. Raises a ValueError if there is no such item.
@@ -394,12 +366,6 @@ class XorClauseList(_ClauseList[XorClause]):
     Class for storing and manipulating a list of xor clauses.
     """
 
-    def foo(self):
-        reveal_type(self[0])
-        reveal_type(Clause([1, 2, 3, 0]) in self)
-        reveal_type(XorClause([1, 2, 3, 0]) in self)
-        reveal_type([1, 2, 3, 0] in self)
-
 
 class XorCNF:
     def __init__(self, clauses: CNF|npt.ArrayLike|None=None, xor_clauses: XorClauseList|npt.ArrayLike|None=None, nvars: int|None=None):
@@ -490,12 +456,7 @@ class XorCNF:
     def __add__(self, other: CNF|XorClauseList|XorCNF) -> Self:
         ...
 
-    @overload
-    def __contains__(self, needle: Clause|XorClause) -> bool:
-        ...
-
-    @overload
-    def __contains__(self, needle) -> Literal[False]:
+    def __contains__(self, needle) -> bool:
         ...
 
     def to_dimacs(self) -> str:
@@ -511,10 +472,6 @@ class XorCNF:
     # copy support
     def __copy__(self) -> Self:
         ...
-
-        reveal_type(Clause([1, 23, 0]) in self)
-        reveal_type(XorClause([1, 23, 0]) in self)
-        reveal_type([1, 23, 0] in self)
 
     def copy(self) -> Self:
         ...
@@ -610,6 +567,3 @@ class Truthtable:
         :rtype: CNF
         """
         ...
-
-abc.Sequence.register(_BaseClause)
-abc.Sequence.register(_ClauseList)
