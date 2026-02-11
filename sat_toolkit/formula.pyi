@@ -7,6 +7,11 @@ import numpy as np
 import numpy.typing as npt
 
 class _BaseClause(abc.Sequence):
+    """
+    :no-index:
+
+    Base class for Clause and XorClause.
+    """
     _clause: list[int]
 
     def __init__(self, clause: Iterable[int]):
@@ -14,6 +19,7 @@ class _BaseClause(abc.Sequence):
 
     @property
     def maxvar(self) -> int:
+        """The highest variable used in this Clause"""
         ...
 
     def __getitem__(self, idx: int) -> int:
@@ -51,11 +57,26 @@ class _BaseClause(abc.Sequence):
         ...
 
 class Clause(_BaseClause):
-    ...
+    """
+    Class to represent a clause in a CNF formula.
+
+    For example, ``Clause([1, 2, 3])`` represents the clause :math:`x_1 \\vee x_2 \\vee x_3`.
+
+    Inverted variables are represented by negative numbers,
+    For example, ``Clause([1, -2])`` represents the clause :math:`x_1 \\vee \\neg x_2`.
+    """
 
 
 class XorClause(_BaseClause):
-    ...
+    """
+    Class to represent an XOR clause.
+
+    For example ``XorClause([1, 2, 3])`` represents the clause :math:`x_1 \\oplus x_2 \\oplus x_3 = 1`.
+
+    Note that by default, the right hand side of the equation is 1.
+    To change the right hand side, flip the sign of the one variable.
+    For example, ``XorClause([-1, 2, 3])`` represents the clause :math:`x_1 \\oplus x_2 \\oplus x_3 = 0`.
+    """
 
 
 class _ClauseList[T: _BaseClause](abc.Sequence):
@@ -107,7 +128,24 @@ class _ClauseList[T: _BaseClause](abc.Sequence):
 
         Index 0 must always map to index 0 again.
 
-        :return: a new CNF with variables changed according to mapping parameter
+        >>> from sat_toolkit.formula import CNF
+        >>> cnf = CNF([1, 2, 3, 0, -2, 3, 0])
+        >>> cnf
+        CNF over 3 variables with 2 clauses
+        >>> print(cnf)
+        p cnf 3 2
+        1 2 3 0
+        -2 3 0
+        >>> cnf_translated = cnf.translate([0, 10, 20, 30])
+        >>> cnf_translated
+        CNF over 30 variables with 2 clauses
+        >>> print(cnf_translated)
+        p cnf 30 2
+        10 20 30 0
+        -20 30 0
+
+        :return: a new CNF/XorClauseList with variables changed according to mapping parameter
+        :rtype: Self
         """
         ...
 
@@ -183,8 +221,8 @@ class CNF(_ClauseList[Clause]):
     a negative number indicates the presence of the negated varaible in the
     clause.
 
-    For example, the CNF (x1 or not x2) and (x2 or x3) can be represented as
-    CNF([1, -2, 0, 2, 3, 0]).
+    For example, the CNF :math:`(x_1 \\vee \\neg x_2) \\wedge (x_2 \\vee x_3)`
+    is represented as ``CNF([1, -2, 0, 2, 3, 0])``.
     """
 
     @staticmethod
@@ -200,6 +238,14 @@ class CNF(_ClauseList[Clause]):
         """
         creates a CNF that asserts that all variables for the provided indices
         are zero.
+
+        >>> from sat_toolkit.formula import CNF
+        >>> cnf = CNF.create_all_zero([1, 2, 5])
+        >>> print(cnf)
+        p cnf 5 3
+        -1 0
+        -2 0
+        -5 0
         """
         ...
 
@@ -406,16 +452,78 @@ class XorCNF:
         ...
 
     def to_cnf(self) -> CNF:
+        """
+        Convert the XorCNF to a CNF. All xor clauses are converted naively to CNF clauses.
+
+        For example, the xor clause :math:`x_1 \\oplus x_2 \\oplus x_3 = 0` is converted to
+        the CNF clauses :math:`(x_1 \\vee x_2 \\vee \\neg x_3) \\wedge (x_1 \\vee \\neg x_2 \\vee x_3) \\wedge (\\neg x_1 \\vee x_2 \\vee x_3) \\wedge (\\neg x_1 \\neg \\vee x_2 \\neg \\vee x_3)`.
+
+        In general, an xor clause with :math:`n` variables is converted to :math:`2^{n-1}` CNF clauses.
+
+        :return: a new CNF object
+        :rtype: CNF
+        """
         ...
 
     def add_clauses(self, clauses: CNF|npt.ArrayLike) -> None:
+        """
+        Add clauses to the CNF.
+
+        >>> from sat_toolkit.formula import XorCNF, CNF
+        >>> xor_cnf = XorCNF()
+        >>> xor_cnf.add_clauses(CNF([1, 2, 3, 0, -1, 2, 0]))
+        >>> print(xor_cnf)
+        p cnf 3 2
+        1 2 3 0
+        -1 2 0
+        >>> xor_cnf.add_clauses([[2, 3, 0, 4, 5, 0]])
+        >>> print(xor_cnf)
+        p cnf 5 4
+        1 2 3 0
+        -1 2 0
+        2 3 0
+        4 5 0
+
+        :param clauses: the clauses to add
+        :type clauses: CNF|npt.ArrayLike
+        :return: None
+        """
         ...
 
     def add_xor_clauses(self, xor_clauses: XorClauseList|npt.ArrayLike) -> None:
+        """
+        Add xor clauses to the XorCNF.
+
+        >>> from sat_toolkit.formula import XorCNF, XorClauseList
+        >>> xor_cnf = XorCNF()
+        >>> xor_cnf.add_xor_clauses(XorClauseList([1, 2, 3, 0, 1, 2, 4, 0]))
+        >>> print(xor_cnf)
+        p cnf 4 2
+        x1 2 3 0
+        x1 2 4 0
+        >>> xor_cnf.add_xor_clauses([2, 3, 0, 4, 5, 0])
+        >>> print(xor_cnf)
+        p cnf 5 4
+        x1 2 3 0
+        x1 2 4 0
+        x2 3 0
+        x4 5 0
+
+        :param xor_clauses: the xor clauses to add
+        :type xor_clauses: XorClauseList|npt.ArrayLike
+        :return: None
+        """
         ...
 
     @property
     def nvars(self) -> int:
+        """
+        The number of variables in the XorCNF.
+        May be higher than the highest variable index used in the CNF or XorClauseList.
+
+        :return: the number of variables
+        :rtype: int
+        """
         ...
 
     @nvars.setter
@@ -424,12 +532,22 @@ class XorCNF:
 
     @property
     def nclauses(self) -> int:
-        """returns the number of CNF clauses (excluding xor clauses)"""
+        """
+        returns the number of CNF clauses (excluding xor clauses)
+
+        :return: the number of CNF clauses
+        :rtype: int
+        """
         ...
 
     @property
     def nxor_clauses(self) -> int:
-        """returns the number of xor clauses (excluding CNF clauses)"""
+        """
+        returns the number of xor clauses (excluding CNF clauses)
+
+        :return: the number of xor clauses
+        :rtype: int
+        """
         ...
 
     def __repr__(self) -> str:
@@ -449,7 +567,8 @@ class XorCNF:
 
     def to_dimacs(self) -> str:
         '''
-        return the XorCNF formatted in the extended DIMACS file format
+        :return: the XorCNF formatted in the extended DIMACS file format
+        :rtype: str
         '''
         ...
 
@@ -462,6 +581,10 @@ class XorCNF:
         ...
 
     def copy(self) -> Self:
+        """
+        :return: a copy of the XorCNF
+        :rtype: XorCNF
+        """
         ...
 
     def __eq__ (self, other) -> bool:
@@ -477,6 +600,14 @@ class XorCNF:
 
         Returns (True, np.array(model, dtype=np.uint8)) for SAT instances.
         Returns (False, None) for UNSAT instances.
+
+        :param command: the command to call the SAT solver, defaults to ``['cryptominisat5']``
+        :param verbose: whether to print command output of the solver, defaults to False
+
+        :return: a tuple of the form (sat, model) where sat is a boolean
+            indicating whether the formula is satisfiable and model is a numpy
+            array with the model if the formula is satisfiable
+        :rtype: ``tuple[Literal[True], np.ndarray]`` if satisfiable, ``tuple[Literal[False], None]`` if unsatisfiable
         """
         ...
 
