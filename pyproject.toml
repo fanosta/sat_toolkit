@@ -14,9 +14,8 @@ authors = [
 
 description = "Tool for manipulating CNF formulas"
 readme = "README.md"
-license = {file = "LICENSE"}
+license = "MIT"
 classifiers = [
-   "License :: OSI Approved :: MIT License",
    "Operating System :: POSIX :: Linux",
    "Operating System :: MacOS",
    "Programming Language :: Python",
