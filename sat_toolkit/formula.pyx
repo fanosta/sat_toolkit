@@ -1374,7 +1374,6 @@ cdef class XorClauseList(_ClauseList):
         return result
 
 from threading import Event
-import select
 
 cdef class XorCNF:
     cdef readonly CNF _clauses
