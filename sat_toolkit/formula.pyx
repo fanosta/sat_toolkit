@@ -1667,7 +1667,6 @@ cdef class XorCNF:
 
                     if stop_event is not None:
                         if stop_event.is_set():
-                            print("Yes! I'm listening!")
                             solver.terminate()
                             solver.wait()
                             return False, None
