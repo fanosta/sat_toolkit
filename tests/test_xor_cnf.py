@@ -2,6 +2,10 @@ import collections
 import numpy as np
 import pytest
 import copy
+from pathlib import Path
+import gzip
+from threading import Thread, Event
+from time import sleep
 
 from sat_toolkit.formula import CNF, Clause, XorClause, XorClauseList, XorCNF
 
@@ -462,3 +466,26 @@ def test_solve_dimacs():
 
         assert result[1] or result[2] or result[3] == 1
         assert result[1] or not result[2] == 1
+
+def load_ascon_cnf() -> XorCNF:
+    big_cnf_path = Path(__file__).parent / 'ascon.cnf.gz'
+    with gzip.open(big_cnf_path, 'rb') as f:
+        return XorCNF.from_dimacs(f.read().decode())
+
+def test_solve_cancel():
+    cnf = load_ascon_cnf()
+    event = Event()
+    event.set()
+    result = cnf.solve_dimacs(stop_event=event)
+    assert result == (None, None)
+
+def test_solve_cancel_thread():
+    cnf = load_ascon_cnf()
+
+    event = Event()
+    thread_handle = Thread(target=lambda: cnf.solve_dimacs(stop_event=event))
+    thread_handle.start()
+
+    sleep(0.1)
+    event.set()
+    thread_handle.join()
