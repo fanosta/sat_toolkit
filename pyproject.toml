@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "wheel", "Cython"]
+requires = ["setuptools>=74.1.0", "wheel", "Cython"]
 
 [project]
 name = "sat-toolkit"
@@ -7,7 +7,7 @@ version = "0.5.0"
 dependencies = [
    "numpy>=2.0"
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
   {name = "Marcel Nageler", email = "marcel.nageler@tugraz.at"},
 ]
@@ -21,7 +21,6 @@ classifiers = [
    "Programming Language :: Python",
    "Programming Language :: Cython",
    "Programming Language :: C",
-   "Framework :: Pytest",
 ]
 
 
@@ -30,8 +29,10 @@ Repository = "https://github.com/fanosta/sat_toolkit"
 "Bug Tracker" = "https://github.com/fanosta/sat_toolkit/issues"
 
 
-[tool.setuptools.package-data]
-autodiver = ["**/log_config.json"]
+[tool.setuptools]
+ext-modules = [
+  {name = "formula", sources = ["sat_toolkit/formula.pyx"]}
+]
 
 [dependency-groups]
 dev = [
