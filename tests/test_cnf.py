@@ -146,9 +146,9 @@ def test_from_dimacs_format_errors():
         CNF.from_dimacs("p cnf 6 0\np cnf 6 0\n")
     with pytest.raises(ValueError):
         CNF.from_dimacs("p cnf 6 1\n1 x 0\n")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='CNF must not contain xor clauses'):
         CNF.from_dimacs("p cnf 6 1\nx 0\n")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='CNF must not contain xor clauses'):
         CNF.from_dimacs("p cnf 6 1\nx1 0\n")
 
 def test_get_units():

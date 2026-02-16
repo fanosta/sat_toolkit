@@ -1382,7 +1382,7 @@ cdef class XorCNF:
         self._clauses = CNF.__new__(CNF)
         self._xor_clauses = XorClauseList.__new__(XorClauseList)
 
-    def __init__(self, clauses: CNF|None=None, xor_clauses: XorClauseList|None=None, nvars: int|None=None):
+    def __init__(self, clauses: CNF|npt.ArrayLike|None=None, xor_clauses: XorClauseList|npt.ArrayLike|None=None, nvars: int|None=None):
         if clauses is not None:
             self._clauses.add_clauses(clauses)
         if xor_clauses is not None:
