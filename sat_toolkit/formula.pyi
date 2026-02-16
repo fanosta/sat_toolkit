@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Literal, Iterable, Iterator, Self
+from typing import Literal, Iterable, Iterator, Self, overload
 import io
 from collections import abc
 from threading import Event
@@ -593,7 +593,15 @@ class XorCNF:
         ...
 
 
-    def solve_dimacs(self, command: list[str]=['cryptominisat5'], stop_event: Event = None, verbose=False) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None]:
+
+    @overload
+    def solve_dimacs(self, command: list[str]=['cryptominisat5'], verbose=False, *, stop_event: Event) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None] | tuple[None, None]:
+        ...
+    @overload
+    def solve_dimacs(self, command: list[str]=['cryptominisat5'], verbose=False, *, stop_event: None) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None]:
+        ...
+
+    def solve_dimacs(self, command: list[str]=['cryptominisat5'], verbose=False, *, stop_event: Event|None = None) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None] | tuple[None, None]:
         """
         solves the SAT by calling a DIMACS compliant sat solver that also
         supports XORs given by command. The solver defaults to cryptominisat5.
@@ -602,6 +610,7 @@ class XorCNF:
 
         Returns (True, np.array(model, dtype=np.uint8)) for SAT instances.
         Returns (False, None) for UNSAT instances.
+        Returns (None, None) for interrupted instances (only possible if stop_event is not None).
 
         :param command: the command to call the SAT solver, defaults to ``['cryptominisat5']``
         :param verbose: whether to print command output of the solver, defaults to False

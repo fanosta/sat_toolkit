@@ -1632,7 +1632,7 @@ cdef class XorCNF:
 
         return self._clauses._clauses == c_other._clauses._clauses and self._xor_clauses._clauses == c_other._xor_clauses._clauses
 
-    def solve_dimacs(self, command: list[str]=['cryptominisat5'], stop_event: Event = None, verbose=False) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None]:
+    def solve_dimacs(self, command: list[str]=['cryptominisat5'], verbose=False, *, stop_event: Event|None = None) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None] | tuple[None, None]:
         """
         solves the SAT by calling a DIMACS compliant sat solver that also
         supports XORs given by command. The solver defaults to cryptominisat5.
@@ -1641,6 +1641,7 @@ cdef class XorCNF:
 
         Returns (True, np.array(model, dtype=np.uint8)) for SAT instances.
         Returns (False, None) for UNSAT instances.
+        Returns (None, None) for interrupted instances.
         """
         cdef int echo_comments, ret_code = 0
         cdef uint8_t[:] result_view
@@ -1664,11 +1665,10 @@ cdef class XorCNF:
 
                 for line in solver.stdout:
 
-                    if stop_event is not None:
-                        if stop_event.is_set():
-                            solver.terminate()
-                            solver.wait()
-                            return False, None
+                    if stop_event is not None and stop_event.is_set():
+                        solver.terminate()
+                        solver.wait()
+                        return None, None
 
                     if echo_comments:
                         print(line, end='')
