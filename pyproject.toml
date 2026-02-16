@@ -32,6 +32,12 @@ Repository = "https://github.com/fanosta/sat_toolkit"
 
 [tool.setuptools.package-data]
 autodiver = ["**/log_config.json"]
+
+[dependency-groups]
+dev = [
+    "icecream>=2.1.10",
+    "pytest>=8.4.2",
+]
 [project.scripts]
 verify-characteristic = "autodiver.verify_characteristic:cli"
 tikzify = "autodiver.tikzify:main"
