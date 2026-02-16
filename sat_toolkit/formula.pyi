@@ -2,6 +2,8 @@ from __future__ import annotations
 from typing import Literal, Iterable, Iterator, Self
 import io
 from collections import abc
+from threading import Event
+
 
 import numpy as np
 import numpy.typing as npt
@@ -591,7 +593,7 @@ class XorCNF:
         ...
 
 
-    def solve_dimacs(self, command: list[str]=['cryptominisat5'], verbose=False) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None]:
+    def solve_dimacs(self, command: list[str]=['cryptominisat5'], stop_event: Event = None, verbose=False) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None]:
         """
         solves the SAT by calling a DIMACS compliant sat solver that also
         supports XORs given by command. The solver defaults to cryptominisat5.

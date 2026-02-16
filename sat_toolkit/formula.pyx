@@ -1373,6 +1373,7 @@ cdef class XorClauseList(_ClauseList):
 
         return result
 
+from threading import Event
 
 cdef class XorCNF:
     cdef readonly CNF _clauses
@@ -1631,7 +1632,7 @@ cdef class XorCNF:
 
         return self._clauses._clauses == c_other._clauses._clauses and self._xor_clauses._clauses == c_other._xor_clauses._clauses
 
-    def solve_dimacs(self, command: list[str]=['cryptominisat5'], verbose=False) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None]:
+    def solve_dimacs(self, command: list[str]=['cryptominisat5'], stop_event: Event = None, verbose=False) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None]:
         """
         solves the SAT by calling a DIMACS compliant sat solver that also
         supports XORs given by command. The solver defaults to cryptominisat5.
@@ -1662,6 +1663,13 @@ cdef class XorCNF:
             with sp.Popen(args, stdin=sp.DEVNULL, stdout=sp.PIPE, text=True) as solver:
 
                 for line in solver.stdout:
+
+                    if stop_event is not None:
+                        if stop_event.is_set():
+                            solver.terminate()
+                            solver.wait()
+                            return False, None
+
                     if echo_comments:
                         print(line, end='')
 
