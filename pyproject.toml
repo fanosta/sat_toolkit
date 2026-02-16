@@ -5,11 +5,11 @@ requires = ["setuptools", "wheel", "Cython"]
 name = "sat-toolkit"
 version = "0.5.0"
 dependencies = [
-   "numpy>=1.21"
+   "numpy>=2.0"
 ]
 requires-python = ">=3.9"
 authors = [
-  {name = "Marcel Nageler", email = "marcel.nageler@iaik.tugraz.at"},
+  {name = "Marcel Nageler", email = "marcel.nageler@tugraz.at"},
 ]
 
 description = "Tool for manipulating CNF formulas"
@@ -38,6 +38,3 @@ dev = [
     "icecream>=2.1.10",
     "pytest>=8.4.2",
 ]
-[project.scripts]
-verify-characteristic = "autodiver.verify_characteristic:cli"
-tikzify = "autodiver.tikzify:main"
