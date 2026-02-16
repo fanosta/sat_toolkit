@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=74.1.0", "wheel", "Cython"]
+requires = ["setuptools>=74.1.0", "Cython"]
 
 [project]
 name = "sat-toolkit"
@@ -31,7 +31,7 @@ Repository = "https://github.com/fanosta/sat_toolkit"
 
 [tool.setuptools]
 ext-modules = [
-  {name = "sat_toolkit.formula", sources = ["sat_toolkit/formula.pyx"]}
+  {name = "sat_toolkit.formula", sources = ["src/sat_toolkit/formula.pyx"]}
 ]
 
 [dependency-groups]
