@@ -37,14 +37,14 @@ class _BaseClause(abc.Sequence):
     def __reversed__(self) -> Iterator[int]:
         ...
 
-    def count(self, needle) -> int:
-        "Return the number of times needle appears in the list."
+    def count(self, value) -> int:
+        "Return the number of times value appears in the list."
         ...
 
-    def index(self, needle: int, start=None, end=None) -> int:
+    def index(self, value: int, start=None, stop=None) -> int:
         """
         Return zero-based index in the list of the first item whose value is
-        equal to needle. Raises a ValueError if there is no such item.
+        equal to ``value``. Raises a ValueError if there is no such item.
 
         The optional arguments start and end are interpreted as in the slice
         notation and are used to limit the search to a particular subsequence
@@ -184,13 +184,13 @@ class _ClauseList[T: _BaseClause](abc.Sequence):
     def __contains__(self, needle) -> bool:
         ...
 
-    def count(self, needle) -> int:
+    def count(self, value) -> int:
         ...
 
-    def index(self, needle, start: int|None=None, end: int|None=None):
+    def index(self, value, start: int|None=None, stop: int|None=None):
         """
         Return zero-based index in the list of the first item whose value is
-        equal to needle. Raises a ValueError if there is no such item.
+        equal to ``value``. Raises a ValueError if there is no such item.
 
         The optional arguments start and end are interpreted as in the slice
         notation and are used to limit the search to a particular subsequence
