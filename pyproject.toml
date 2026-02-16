@@ -31,7 +31,7 @@ Repository = "https://github.com/fanosta/sat_toolkit"
 
 [tool.setuptools]
 ext-modules = [
-  {name = "formula", sources = ["sat_toolkit/formula.pyx"]}
+  {name = "sat_toolkit.formula", sources = ["sat_toolkit/formula.pyx"]}
 ]
 
 [dependency-groups]
