@@ -441,8 +441,8 @@ cdef class _ClauseList:
     cdef str _to_dimacs(self, const char* clause_prefix):
         cdef size_t max_len = snprintf(NULL, 0, "%d", -self.nvars)
         cdef size_t nclauses = self._start_indices.size()
-        cdef ssize_t buf_size = (self._clauses.size() - nclauses) * (max_len + 1) + nclauses * (2) + nclauses * len(clause_prefix)
-        cdef char *buf = <char *> malloc(buf_size + 1)
+        cdef ssize_t buf_size = (self._clauses.size() - nclauses) * (max_len + 1) + nclauses * (2) + nclauses * len(clause_prefix) + 1
+        cdef char *buf = <char *> malloc(buf_size)
         cdef ssize_t buf_idx = 0, written
         cdef size_t i
 

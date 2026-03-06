@@ -467,6 +467,16 @@ def test_solve_dimacs():
         assert result[1] or result[2] or result[3] == 1
         assert result[1] or not result[2] == 1
 
+
+def test_to_dimacs_regresssion():
+    cnf = XorCNF.create_xor([], [], [])
+    cnf.add_clauses([-7, -8, -9, 0])
+    print(cnf)
+    print(repr(cnf.to_dimacs()))
+    assert cnf.to_dimacs() == "p cnf 9 1\n-7 -8 -9 0\n"
+
+
+
 def load_ascon_cnf() -> XorCNF:
     big_cnf_path = Path(__file__).parent / 'ascon.cnf.gz'
     with gzip.open(big_cnf_path, 'rb') as f:
