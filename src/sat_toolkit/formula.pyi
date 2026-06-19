@@ -598,7 +598,7 @@ class XorCNF:
     def solve_dimacs(self, command: list[str]=['cryptominisat5'], verbose=False, *, stop_event: Event) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None] | tuple[None, None]:
         ...
     @overload
-    def solve_dimacs(self, command: list[str]=['cryptominisat5'], verbose=False, *, stop_event: None) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None]:
+    def solve_dimacs(self, command: list[str]=['cryptominisat5'], verbose=False, *, stop_event: None=None) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None]:
         ...
 
     def solve_dimacs(self, command: list[str]=['cryptominisat5'], verbose=False, *, stop_event: Event|None = None) -> tuple[Literal[True], np.ndarray] | tuple[Literal[False], None] | tuple[None, None]:
