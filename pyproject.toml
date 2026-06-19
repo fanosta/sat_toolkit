@@ -3,7 +3,7 @@ requires = ["setuptools>=74.1.0", "Cython"]
 
 [project]
 name = "sat-toolkit"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
    "numpy>=2.0"
 ]
